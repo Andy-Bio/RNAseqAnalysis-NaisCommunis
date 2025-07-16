@@ -15,10 +15,6 @@ Este repositorio contiene el análisis transcriptómico de *Nais communis*.
 ## Archivos principales
 
 - `NAIco.Rmarkdown.AF.Rmd`: documento Rmarkdown con el pipeline.
-- `NAIco_v2_t1.trinity.out.transcripts.fasta`: archivo fasta del transcriptoma ensamblado de Nais communis
-- `GSF1048-OT-NC-D1_S26_R1_001.qtrim.fq`: documento Rmarkdown con el pipeline
-- `GSF1048-OT-NC-D2_S27_R1_001.qtrim.fq`: documento Rmarkdown con el pipeline
-- `GSF1048-OT-NC-D3_S28_R1_001.qtrim.fq`: documento Rmarkdown con el pipeline
 
 ## Resultados esperados
 
