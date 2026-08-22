@@ -23,7 +23,7 @@ sudo tar -xzvf trinityrnaseq-v2.15.1.FULL.tar.gz
 ```
 
 #PREPARADO REFERENCIA del genoma de *Capitella teleta* 
-##usando *makeblastdb* genero el indice para blastear luego
+usando *makeblastdb* genero el indice para blastear luego
 ```{bash index, eval = FALSE}
 makeblastdb -in mnt/c/Users/andy8/OneDrive/Desktop/TESIS/DATA/makeblastDB/capitella/CAPte_genes.fna -dbtype nucl -out /mnt/c/Users/andy8/OneDrive/Desktop/TESIS/DATA/makeblastDB/capitella/CAPte_genes.fa
 makeblastdb -in mnt/c/Users/andy8/OneDrive/Desktop/TESIS/DATA/makeblastDB/capitella/CAPte_prot.faa -dbtype prot -out /mnt/c/Users/andy8/OneDrive/Desktop/TESIS/DATA/makeblastDB/capitella/CAPte_prot.fa
@@ -106,7 +106,7 @@ sudo Trinotate-Trinotate-v4.0.2/Trinotate --db CAPte_Trinotate.sqlite --report >
                                         
                                         #########################
                                         
-##Ahora que tenemos el reporte de anotaciones de Trinotate, podemos importarlo a R y usarlo luego para anotar nuestros resultados.
+Ahora que tenemos el reporte de anotaciones de Trinotate, podemos importarlo a R y usarlo luego para anotar nuestros resultados.
                                       
                                        ###########################
 
@@ -122,6 +122,7 @@ library("limma")
 library("edgeR")
 library("readr")
 library("dplyr")
+library("plyr")
 library("GOfuncR")
 library("Biobase")
 library("GGally")
@@ -137,7 +138,11 @@ library("stringi")
 library("clusterProfiler")
 library("purrr")
 library("VennDiagram")
-library("treemap")
+library("xfun")
+library("GOplot")
+library("scales")
+library("pheatmap")
+library("paletteer")
 ```
 
 ```{r WD}
@@ -184,7 +189,7 @@ nai_to_cap_table <- nai_to_cap[!duplicated(nai_to_cap),]
 nai_to_pri_table <- nai_to_pri[!duplicated(nai_to_pri),]
 ```
 
-Nuestra tabla de "traduccion" ahora tiene `r length(unique(nai_to_cap_table$gene_id))` genes de *Nais* que tuvieron un hit en el blasteo a `r length(unique(nai_to_cap_table$target_id))` genes de *Capitella*. 
+La tabla de "traduccion" ahora tiene `r length(unique(nai_to_cap_table$gene_id))` genes de *Nais* que tuvieron un hit en el blasteo a `r length(unique(nai_to_cap_table$target_id))` genes de *Capitella*. 
 
 
 Generamos una tabla de anotacion mapeando los genes modelo de *Nais* a las proteinas de referencia de Uniprot, usando el archivo `CAPte.transcripts.blastx.outfmt6`.
@@ -301,7 +306,8 @@ CAPte_trinnotate_genenames <- read_tsv("CAPte_trinnotate_genenames.tsv")
                            ###############################
                                 DISEÑO EXPERIMENTAL
                           ################################
-##Amputacion. Los ejemplares fueron anestesiados con agua helada, se les amputo el tercio anterior o posterior del cuerpo con un bisturí y se los dejo en el medio para que regeneraran de 1 a 3 días. Fueron separados en tres lotes de 50 fragmentos anteriores y 50 fragmentos posteriores cada uno. Las muestras se agruparan segun los dias pasados luego de la amputacion (cada muestra contiene tanto el fragmento anterior como el posterior). Esto implica tres *grupos*:
+# DISEÑO EXPERIMENTAL
+Amputacion. Los ejemplares fueron anestesiados con agua helada, se les amputo el tercio anterior o posterior del cuerpo con un bisturí y se los dejo en el medio para que regeneraran de 1 a 3 días. Fueron separados en tres lotes de 50 fragmentos anteriores y 50 fragmentos posteriores cada uno. Las muestras se agruparan segun los dias pasados luego de la amputacion (cada muestra contiene tanto el fragmento anterior como el posterior). Esto implica tres *grupos*:
 
 | Grupos del analisis
 |-----------------------------------|
@@ -312,9 +318,10 @@ CAPte_trinnotate_genenames <- read_tsv("CAPte_trinnotate_genenames.tsv")
 | **D2**: 48 hs despues del corte   |
 | **D3**: 72 hs despues del corte   | 
 
-##extraccion y secuenciacion: se extrajo el ARN total en tres muestras separadas segun el grupo, con las que posteriormente se armaron las bibliotecas para su secuenciacion
+Extraccion y secuenciacion. Se extrajo el ARN total en tres muestras separadas segun el grupo, con las que posteriormente se armaron las bibliotecas para su secuenciacion
 
-##ENSAMBLE: las 3 muestras fueron pooleados en un solo archivo fasta, y el transcriptoma de referencia *NAIco_v2_t1* se ensamblo usando Trinity v2.3.2 en un nodo único de 32 CPU con 64GB de RAM en el clúster de computadoras Mason de la Universidad de Indiana, Bloomington. Las secuencias codificantes candidato se predijeron utilizando Transdecoder v5.7.1 (http://transdecoder.github.io/). Los ensambles se anotaron usando Trinotate v4.0.2 (https://trinotate.github.io/), basadas en busquedas de blast+ contra la base de datos de las especies de referencia que habian sido blasteadas contra las bases de datos UniProt/Swissprot, y se les habia hecho escaneos HMMER contra la base de datos Pfam, y predicciones para peptidos señal y dominios transmembrana.
+#ENSAMBLE: 
+las 3 muestras fueron pooleados en un solo archivo fasta, y el transcriptoma de referencia *NAIco_v2_t1* se ensamblo usando Trinity v2.3.2 en un nodo único de 32 CPU con 64GB de RAM en el clúster de computadoras Mason de la Universidad de Indiana, Bloomington. Las secuencias codificantes candidato se predijeron utilizando Transdecoder v5.7.1 (http://transdecoder.github.io/). Los ensambles se anotaron usando Trinotate v4.0.2 (https://trinotate.github.io/), basadas en busquedas de blast+ contra la base de datos de las especies de referencia que habian sido blasteadas contra las bases de datos UniProt/Swissprot, y se les habia hecho escaneos HMMER contra la base de datos Pfam, y predicciones para peptidos señal y dominios transmembrana.
 ```{bash Trinity en cluster, eval = FALSE}
 #!/bin/bash
 
@@ -350,7 +357,7 @@ exit 0
 ```
 
 #ALINEACION Y CONTEO DE READS 
-##La alineacion de los reads al transcriptoma de referencia de *NAIco_v2_t1* y la estimacion de la abundancia de transcriptos se llevo a cabo usando el script de perl `align_and_estimate_abundance.pl` y `abundance_estimates_to_matrix.pl` incluido en Trinity-v2.15.1, usando Bowtie2 como metodo de alineacion y RSEM como metodo de estimacion de abundancia. El alineamiento se hizo en un nodo unico de 14 CPU con y 16GB de RAM.
+La alineacion de los reads al transcriptoma de referencia de *NAIco_v2_t1* y la estimacion de la abundancia de transcriptos se llevo a cabo usando el script de perl `align_and_estimate_abundance.pl` y `abundance_estimates_to_matrix.pl` incluido en Trinity-v2.15.1, usando Bowtie2 como metodo de alineacion y RSEM como metodo de estimacion de abundancia. El alineamiento se hizo en un nodo unico de 14 CPU con y 16GB de RAM.
 
 ```{bash Trinity: Alignment Reference Bowtie Indexing, eval=FALSE}
 /trinityrnaseq-Trinity-v2.15.1/util/align_and_estimate_abundance.pl --transcripts /mnt/c/Users/andy8/OneDrive/Desktop/TESIS/DATA/Nais_Mio/NAIco_v2/NAIco_v2_t1.trinity.out.transcripts.fasta \
@@ -366,7 +373,7 @@ sudo /trinityrnaseq-Trinity-v2.15.1/util/align_and_estimate_abundance.pl --trans
 sudo /trinityrnaseq-Trinity-v2.15.1/util/align_and_estimate_abundance.pl --transcripts /mnt/c/Users/andy8/OneDrive/Desktop/TESIS/DATA/Nais_Mio/NAIco_v2/NAIco_v2_t1.trinity.out.transcripts.fasta --seqType fq --single /mnt/c/Users/andy8/OneDrive/Desktop/TESIS/DATA/Nais_Mio/NAIco_v2/NAIco_v2_t1.trinity.out/GSF1048-OT-NC-D3_S28_R1_001.qtrim.fq --est_method RSEM --aln_method bowtie2 --trinity_mode --output_dir /mnt/c/Users/andy8/OneDrive/Desktop/TESIS/DATA/Nais_Mio/NAIco_v2/GSF1048_RSEM.out/D3/ --thread_count 7
 ```
 
-#MATRIZ DE CONTEOS
+##matriz de conteos
 ```{bash trinity Preparacion matriz de conteos de transcriptos usando gen_to_trans de NAIco, eval = FALSE}
 sudo /trinityrnaseq-Trinity-v2.15.1/util/abundance_estimates_to_matrix.pl \
 --est_method RSEM \
@@ -378,13 +385,12 @@ sudo /trinityrnaseq-Trinity-v2.15.1/util/abundance_estimates_to_matrix.pl \
  
 #ANALISIS DE EXPRESION DIFERENCIAL
 
-                       
                                ##         #edgeR#         ##
 #EDGER                     
-#Para realizar el analisis de expresion diferencial entre los diferentes grupos, usamos el pipeline `classic` del paquete `edgeR2` de Bioconductor, tanto para el mapeo de los genes como para los analisis estadisticos.  Este modelo de aproximacion usa modelos lineales generalizados con distribucion binomial negativa (muestra una sobredispersion de los datos de los conteos), para probar la hippotesis nula de que **un contraste entre dos grupos de muestras no muestran expresion diferencial (LFC == 0)**. Este metodo provee un control mas estricto de la tasa de error que otros metodos basados en una distribucion binomial negativa (Robinson and Smyth 2008, 2007; McCarthy, Chen, and Smyth 2012). Si bien este pipeline esta pensado para analisis de expresion diferencial en experimentos con pocas replicas biologicas, permite fijar un valor de dispersion de los datos, lo que hace que pueda ser utilizado en escenarios de ausencia de replicas biologicas, aunque no es lo recomendable. 
+Para realizar el analisis de expresion diferencial entre los diferentes grupos, usamos el pipeline `classic` del paquete `edgeR2` de Bioconductor, tanto para el mapeo de los genes como para los analisis estadisticos.  Este modelo de aproximacion usa modelos lineales generalizados con distribucion binomial negativa (muestra una sobredispersion de los datos de los conteos), para probar la hippotesis nula de que **un contraste entre dos grupos de muestras no muestran expresion diferencial (LFC == 0)**. Este metodo provee un control mas estricto de la tasa de error que otros metodos basados en una distribucion binomial negativa (Robinson and Smyth 2008, 2007; McCarthy, Chen, and Smyth 2012). Si bien este pipeline esta pensado para analisis de expresion diferencial en experimentos con pocas replicas biologicas, permite fijar un valor de dispersion de los datos, lo que hace que pueda ser utilizado en escenarios de ausencia de replicas biologicas, aunque no es lo recomendable. 
 
-#EXPLORACION DE LOS DATOS CON `edgeR`
-##Preparacion del objeto DGEList para los analisis
+##exploracion de los datos con `edgeR`
+Preparacion del objeto DGEList para los analisis
 ```{r importar y ver la matriz de counts}
 NAIco_cts <- read.table("RSEM.isoform.counts.matrix", header=T, row.names=1, com='')
 str(NAIco_cts)
@@ -407,13 +413,13 @@ NAIco_filt <- NAIco_DGEList[keep, , keep.lib.sizes=FALSE]
 NAIco_filt_TMM <- edgeR::calcNormFactors(NAIco_filt, method = "TMM")
 ```
 
-#obtener conteos por millon usando `cpm` de EdgeR, se debe volver a filtrar y calcular el tamaño de las bibliotecas nuevamente
+obtener conteos por millon usando `cpm` de EdgeR, se debe volver a filtrar y calcular el tamaño de las bibliotecas nuevamente
 ```{r cpm}
 NAIco_filt_TMM_cpm <- edgeR::cpm(NAIco_filt_TMM)
 colSums(NAIco_filt_TMM_cpm)
 ```
 
-#Deben transformarse los counts a log2 para estabilizar la varianza
+Deben transformarse los counts a log2 para estabilizar la varianza
 ```{r log2}
 NAIco_log2 <- edgeR::cpm(NAIco_filt_TMM_cpm, log=TRUE)
 NAIco_log2.df <- as_tibble(NAIco_log2, rownames = "gene_id")
@@ -422,7 +428,7 @@ str(NAIco_log2.df)
 dim(NAIco_log2.df)
 ```
 
-#GRAFICO distribucion log2 
+grafico distribucion log2 
 ```{r grafico la distribucion de log2cpm}
 # pivotea los datos FILTRADOS para hacer una tabla compatible con tidyverse 
 NAIco_log2.df.pivot <- pivot_longer(NAIco_log2.df, # datos a pivotear
@@ -447,8 +453,8 @@ ggplot(NAIco_log2.df.pivot) +
   theme(axis.text.x = element_text(angle = 90, hjust = 1))
 ```
 
-#GRAFICO MD INDIVIDUALES
-##perfiles de expresion de muestras individuales *correr en la consola*
+grafico MD individuales
+perfiles de expresion de muestras individuales *correr en la consola*
 ```{r grafico MD}
 #compara cada muestra a una biblioteca de referencia artificial construida del promedio de las otras muestras
 head(NAIco_filt_TMM_cpm)
@@ -468,7 +474,7 @@ abline(h=0, col="red", lty=2, lwd=2)
 ```
 
 #DGE *CLASICA* DE `edgeR`
-##establecer la dispersion. 0.1 suele ser un valor tipico para la BCV (coeficiente de variacion biologica) cuando se trata de organismos geneticamente identicos
+establecer la dispersion. 0.1 suele ser un valor tipico para la BCV (coeficiente de variacion biologica) cuando se trata de organismos geneticamente identicos
 La funcion `ExactTest` del paquete realiza un contraste D1 vs D2 con la direccion D2-D1, por lo que valores de logFC + corresponden a genes expresados diferencialmente en el D2 y los valores de logFC - corresponden a genes expresados diferencialmente en el D1
 ```{r defino dispersion y hago comparasiones pareadas}
 bcv <- 0.1
@@ -532,7 +538,8 @@ top_tags <- get_top_tags(ED_res_tot, n = 20)
 print(top_tags)
 ```
 
-#hago un grafico de volcan con aquellos features que, significativamente, se transcriben mas o menos en un dia que en el otro
+##volcano plot
+hago un grafico de volcan con aquellos features que, significativamente, se transcriben mas o menos en un dia que en el otro
 ```{r volcano plot}
 
 volc_res_tib <- rbind(res_1.2 %>% mutate(test = "D1-D2"), 
@@ -556,8 +563,8 @@ interactive_plot <- ggplotly(g_volc_res, tooltip = "text")
 interactive_plot
 ```
 
-#ANOTACION TABLA FINAL
-## join de la tabla de resultados a las anotaciones
+##anotacion tabla final
+join de la tabla de resultados a las anotaciones
 
 ```{r join a Capitella}
 #primero elimino el sufijo .p1 de la columna `gene_id`
@@ -584,9 +591,9 @@ head(annot_join_E)
 #annot_join_E = 222,663 entradas
 ```
 
-#`r length(unique(annot_join_E$gene_id))` elmentos de Nais alinearon a diferentes genes de Capitella `r length(unique(annot_join_E$target_id))` que resultan isoformas de solo `r length(unique(annot_join_E$name))` proteinas
+`r length(unique(annot_join_E$gene_id))` elmentos de Nais alinearon a diferentes genes de Capitella `r length(unique(annot_join_E$target_id))` que resultan isoformas de solo `r length(unique(annot_join_E$name))` proteinas
 
-#LIMPIEZA DE LA TABLA `annot_join_E`
+LIMPIEZA DE LA TABLA `annot_join_E`
 ```{r}
 #Remuevo entradas duplicadas
 #annot_join_E = 222,663 entradas
@@ -608,14 +615,15 @@ length(unique(annot_join_E$gene_id))==length(annot_join_E$gene_id)#TRUE
 write_tsv(annot_join_E, file = "annot_join_E.tsv")
 write.csv(annot_join_E, file = "annot_join_E_2.csv", row.names = FALSE)
 ```
-# NOISEQ
+
+#NOISEQ
 
                                   #####NOIseq#####
                               
-## Este paquete de Bioconductor, disponible en `https://git.bioconductor.org/packages/NOISeq` fue desarrollado especificamente para el analisis de expresion diferencial de data sets con replicados tecnicos o sin replicados como son los organismos clonales en este caso. Usa metodos que se adaptan a los datos y son no parametricos, por lo que no se hacen supuestos sobre la distribucion de los datos y los analisis de expresion diferencial pueden realizarse tanto con los read crudos o con sets de datos que fueron previamente normalizados o transformados. #Tarazona S et. al. (2011)#Tarazona S, et.al. (2015)
+Este paquete de Bioconductor, disponible en `https://git.bioconductor.org/packages/NOISeq` fue desarrollado especificamente para el analisis de expresion diferencial de data sets con replicados tecnicos o sin replicados como son los organismos clonales en este caso. Usa metodos que se adaptan a los datos y son no parametricos, por lo que no se hacen supuestos sobre la distribucion de los datos y los analisis de expresion diferencial pueden realizarse tanto con los read crudos o con sets de datos que fueron previamente normalizados o transformados. #Tarazona S et. al. (2011)#Tarazona S, et.al. (2015)
 
-# EXPLORACION DE LOS DATOS
-### Cargo todos los datos necesarios. NOISeq requiere un d.f o matriz de counts para todos los tratamientos, uno de factores (con todos los niveles del factor tratamiento) y una de largos de los fragmentos (en otros casos se reqieren mas datos)
+#Exploracion de los datos con 'NOISeq' 
+Cargo todos los datos necesarios. NOISeq requiere un dataframe o matriz de counts para todos los tratamientos, uno de factores (con todos los niveles del factor tratamiento) y una de largos de los fragmentos (en otros casos se reqieren mas datos)
 
 ```{r imput datos, , eval = FALSE}
 conteos <- read.table("RSEM.isoform.counts.matrix", header=T, row.names=1, com='')
@@ -662,26 +670,23 @@ NAIco_datos
 NAIco_datos <- addData(NAIco_datos, length = largosdf)#agregue los largos despues y funciono, esta mal el formato que pide en el instructivo, tiene que ser un df con los nombres de fragmentos como observaciones tambien, no como nombre de columnas
 ```
 
-## GRAFICO de saturacion
+GRAFICO de saturacion
 ```{r profundida de secuenciacion y cuantificacion de expresion}
 datos_sat = dat(NAIco_datos, k = 0, ndepth = 7, type = "saturation")
 explo.plot(datos_sat, toplot = 1, samples = 1:3, yleftlim = NULL, yrightlim = NULL)
 ```
-
-## GRAFICO de distribucion
+GRAFICO de distribucion
 ```{r distribucion de conteos por muestra}
 datos_Cdist = dat(NAIco_datos, factor = NULL, type = "countsbio")
 explo.plot(datos_Cdist, toplot = 1, samples = 1:3, plottype = "boxplot")
 ```
-
-## GRAFICO de sensibilidad
+GRAFICO de sensibilidad
 ```{r grafico de sensibilidad}
 #las feature con bajos counts son menos confiables, estos graficos ayudan a decidir el numbral del numero de count para filtrar luego
 explo.plot(datos_Cdist, toplot = 1, samples = NULL, plottype = "barplot")
 # elijo >2
 ```
-
-## GRAFICO sesgo de secuenciacion
+GRAFICO sesgo de secuenciacion
 ```{r deteccion de sesgo de secuenciacion}
 #sesgo por el largo. El grafico nuestra la relacion entre el largo del transcripto o gen y sus valores de expresion. pvalor significativo y R2 > 70% la expresion depende del largo, se debe aplicar normalizacion x el largo
 datos_lar = dat(NAIco_datos, factor = "DiasPostAmp", type = "lengthbias")
@@ -692,7 +697,7 @@ explo.plot(datos_lar, samples = NULL, toplot = "global")
 ###deberia normalizar segun el largo de los fragmentos!
 ```
 
-## reporte final (pre normalizacion y filtrado)
+reporte final (pre normalizacion y filtrado)
 ```{r reporte final}
 #para comparar con el que hacemos luego de la normalizacion de los datos
 QCreport(NAIco_datos, samples = c("D1", "D2"), factor = NULL, norm = FALSE)#devuelve="Diagnostic test: FAILED. Normalization is required to correct this bias." null device 1 
@@ -700,9 +705,9 @@ QCreport(NAIco_datos, samples = c("D1", "D3"), factor = NULL, norm = FALSE)#devu
 QCreport(NAIco_datos, samples = c("D2", "D3"), factor = NULL, norm = FALSE)#devuelve="Diagnostic test: FAILED. Normalization is required to correct this bias." null device 1
 ```
 
-# filtrado y normalizacion de los datos para eliminar sesgos y aumentar la comparabilidad entre las muestras
+##filtrado y normalizacion de los datos para eliminar sesgos y aumentar la comparabilidad entre las muestras
 
-# filtrado de datos con conteos bajos
+##filtrado de datos con conteos bajos
 ```{r filtrado CPM}
 conteosFILT = filtered.data(conteos, factor = factor$DiasPostAmp, norm = FALSE, depth = NULL, method = 1, cv.cutoff = 100, cpm = 5, p.adj = "fdr")#quedan 26153
 
@@ -723,7 +728,7 @@ NAIco_datos_FILT_TMM <- ExpressionSet(
 head(NAIco_datos_FILT_TMM[, 1:3])
 ```
 
-# vuelvo a probar los graficos luego de normalizacion y filtrado
+vuelvo a probar los graficos luego de normalizacion y filtrado
 ```{r}
 #primero hago de nuevo el objeto NOISeq
 #genero el objeto `NOISeq` (de clase eSet de Biobase) a partir de mis datos filtrados y normalizados. Esta vez sin los largos porque no van a coincidir
@@ -739,7 +744,7 @@ FILTTMM_sens = dat(NAIco_datos_FILT_TMM, factor = NULL, type = "countsbio")
 explo.plot(FILTTMM_sens, toplot = 1, samples = NULL, plottype = "barplot")
 ```
 
-## reporte final (post normalizacion y filtrado)
+##reporte final (post normalizacion y filtrado)
 ```{r reporte final de control de calidad}
 #lo vuelvo a hacer con la normalizacion y filtrado
 QCreport(NAIco_datos_FILT_TMM, samples = c("D1", "D2"), factor = NULL, norm = TRUE)#devuelve="Diagnostic test: PASSED." 
@@ -747,13 +752,14 @@ QCreport(NAIco_datos_FILT_TMM, samples = c("D1", "D3"), factor = NULL, norm = TR
 QCreport(NAIco_datos_FILT_TMM, samples = c("D2", "D3"), factor = NULL, norm = TRUE)#devuelve="Diagnostic test: PASSED."
 ```
 
-#ANALISIS DE EXPRESION DIFERENCIAL USANDO LA APROXIMACION NO PARAMETRICA `NOISeq-sim` del paquete *NOISeq*
- ###Cuando no hay replicados (ni biologicos ni tecnicos) esta aproximacion toma los parametros norm=n;k=NULL;nss=>=5;pnr=0.2;v=0.02, si se utilizan los counts ya normalizados.(NAIco_datos_FILTTMM) 
- ###M=la relacion log2 entre las dos condiciones comparadas
- ###D=diferencia entre las dos condiciones comparadas
- ###k=valor por el que reemplaza los valores 0
- ###se considera que un feature tiene expresion diferencial si sus valores M y D son mayores que en el caso de ruido. Lo calcula como probabilidad, una probabilidad de 4:1 es equivalente a q=Pr(expresion diferencial)=0.8 y significa q ese feature es 4 veces mas probable q este diferencialmente expresado a que no lo este. NOISeq-sim, particularmente, simula replicados tecnicos para calcular esta probabilidad porque los datos no los tiene.  
- ##La funcion `noiseq` del paquete realiza un contraste D2 vs D1 (especificado asi para que coincida con los resultados de EdgeR) con la direccion D2-D1, por lo que valores de M (logFC) + corresponden a genes expresados diferencialmente en el D2 y los valores de M (logFC) - corresponden a genes expresados diferencialmente en el D1
+#DGE *NOISeq-sim* DE 'NOISeq'
+ANALISIS DE EXPRESION DIFERENCIAL USANDO LA APROXIMACION NO PARAMETRICA `NOISeq-sim` del paquete *NOISeq*
+Cuando no hay replicados (ni biologicos ni tecnicos) esta aproximacion toma los parametros norm=n;k=NULL;nss=>=5;pnr=0.2;v=0.02, si se utilizan los counts ya normalizados.(NAIco_datos_FILTTMM) 
+M=la relacion log2 entre las dos condiciones comparadas
+D=diferencia entre las dos condiciones comparadas
+k=valor por el que reemplaza los valores 0
+se considera que un feature tiene expresion diferencial si sus valores M y D son mayores que en el caso de ruido. Lo calcula como probabilidad, una probabilidad de 4:1 es equivalente a q=Pr(expresion diferencial)=0.8 y significa q ese feature es 4 veces mas probable q este diferencialmente expresado a que no lo este. NOISeq-sim, particularmente, simula replicados tecnicos para calcular esta probabilidad porque los datos no los tiene.  
+La funcion `noiseq` del paquete realiza un contraste D2 vs D1 (especificado asi para que coincida con los resultados de EdgeR) con la direccion D2-D1, por lo que valores de M (logFC) + corresponden a genes expresados diferencialmente en el D2 y los valores de M (logFC) - corresponden a genes expresados diferencialmente en el D1
 
 ```{r analisis estadistico de probabilidad de expresion diferencial}
 #en estos tests, cuanto mas alta es la prob, mas chances hay de que la diferencia en expresion sea por el tratamiento
@@ -796,13 +802,14 @@ NOI_res_tot <- as_tibble(NOI_res_tot , rownames = "gene_id")
 head(NOI_res_tot)
 ```
 
-#grafico los resultados (los genes diferencialmente expresados entre una condicion y la otra estan resaltados en rojo) grafico por defecto del paquete
+##expresion promedio
+grafico los resultados (los genes diferencialmente expresados entre una condicion y la otra estan resaltados en rojo) grafico por defecto del paquete
 ```{r grafico DE, de expresion promedio}
 DE.plot(NOI_res_1.2, q = 0.99, graphic = "expr", log.scale = TRUE, col = "snow3")#541
 DE.plot(NOI_res_1.3, q = 0.99, graphic = "expr", log.scale = TRUE, col = "snow3")#1063
 DE.plot(NOI_res_2.3, q = 0.99, graphic = "expr", log.scale = TRUE, col = "snow3")#490
 ```
-###preparacion para el volcano plot
+##volcano plot
 ```{r, "IN=NOI_res_1.2 y otros"}
 #paso los resultados a un .tib
 tab_NOI_res_1.2 <- NOI_res_1.2@results
@@ -852,8 +859,8 @@ g_NOI_res_tot_volc <-
 g_NOI_res_tot_volc
 ```
 
-#ANOTACION TABLA FINAL
-##join de la tabla de resultados a las anotaciones
+##anotacion tabla final
+join de la tabla de resultados a las anotaciones
 
 ```{r join a Capitella}
 #primero elimino el sufijo .p1 de la columna `gene_id`
@@ -880,9 +887,9 @@ head(annot_join_N)
 #annot_join_N = 351.707 entradas
 ```
 
-#`r length(unique(annot_join_N$gene_id))` elmentos de Nais alinearon a diferentes genes de Capitella `r length(unique(annot_join_N$target_id))` que resultan isoformas de solo `r length(unique(annot_join_N$name))` proteinas
+`r length(unique(annot_join_N$gene_id))` elmentos de Nais alinearon a diferentes genes de Capitella `r length(unique(annot_join_N$target_id))` que resultan isoformas de solo `r length(unique(annot_join_N$name))` proteinas
 
-#LIMPIEZA DE LA TABLA `annot_join_N`
+LIMPIEZA DE LA TABLA `annot_join_N`
 ```{r}
 #Remuevo entradas duplicadas
 #annot_join_N = 1,234,491 entradas
@@ -913,9 +920,9 @@ write_tsv(annot_join_N, file = "annot_join_N.tsv")
 ED.NOI_join <- full_join(ED_res_tot, NOI_res_tot, by = "gene_id", suffix = c(".E", ".N"), keep = T)
 class(ED.NOI_join)#2130 obs
 ```
-#DIFERENCIAS ambos analisis
+#DIFERENCIAS AMBOS ANALISIS
 
-##ANTES annot
+##antes annot
 ```{r}
 #E = 484
 #N = 2094
@@ -960,7 +967,7 @@ grid.newpage()
 grid.draw(venn.plot)
 ```
 
-##DESPUES annot
+##despues annot
 ```{r}
 #E = 166
 #N = 544
@@ -1004,7 +1011,8 @@ grid.newpage()
 grid.draw(venn.plot)
 ```
 
-##Quiero comprobar la correspondencia entre los parametros usados por las dos aprocciomaciones, para comprobar la comparabilidad
+# CORRESPONDENCIA ENTRE LOS PARAMETROS USADOS
+quiero probar la correspondencia entre los parametros usados por las dos aprocciomaciones, para comprobar la comparabilidad
 ###LFCvsM
 ```{r grafico de correlacion comun}
 ggplot(ED.NOI_join, aes(x = logFC, y = M)) +
@@ -1031,7 +1039,7 @@ ggplot(ED.NOI_join, aes(x = PValue, y = prob)) +
        y = "prob=q") +
   theme_minimal()  # Usar un tema minimalista
 ```
-###Algunos graficos de todas las columnas juntas
+Algunos graficos de todas las columnas juntas
 ```{r grafico de correlacion `ggpairs`} 
 ggpairs(ED.NOI_join, columns=c("logFC", "M", "PValue", "prob"))
 #en la parte inferior izq. estan los grafico de correlacion y en la superior der. los valores de R2 / Estrellitas son valores de significancia
@@ -1061,7 +1069,7 @@ corrplot(corr = cor_matrix, order = "hclust")
 ED.NOI_Rjoin <- right_join(ED_res_tot, NOI_res_tot, by = "gene_id", suffix = c(".E", ".N"), keep = F)
 class(ED.NOI_Rjoin)#2094 obs
 ```
-#INNER_JOIN con las bases de datos de referencia
+##INNER_JOIN con las bases de datos de referencia
 ```{r join a Capitella}
 #primero elimino el sufijo .p1 de la columna `gene_id`
 nai_to_cap_table_sinP <- nai_to_cap_table
@@ -1088,9 +1096,9 @@ head(total_join )
 write_tsv(total_join, file = "total_join.tsv")
 ```
 
-### `r length(unique(total_join$gene_id))` elmentos de Nais alinearon a diferentes genes de Capitella `r length(unique(total_join$target_id))` que resultan isoformas de solo `r length(unique(total_join$name))` proteinas
+`r length(unique(total_join$gene_id))` elmentos de Nais alinearon a diferentes genes de Capitella `r length(unique(total_join$target_id))` que resultan isoformas de solo `r length(unique(total_join$name))` proteinas
 
-## LIMPIEZA DE LA TABLA `total_join`
+##limpieza de la tabla `total_join`
 ```{r}
 #Remuevo entradas duplicadas
 #total_join = 1.234.491 entradas
@@ -1120,1473 +1128,8 @@ length(unique(total_join_4$target_id))==length(total_join_4$target_id)#TRUE
 length(unique(total_join_4$name))==length(total_join_4$name)#TRUE
 ```
 
-#GO: ANALISIS DE ENRIQUECIMIENTO FUNCIONAL MEDIANTE `terminos GO`
-###generando tablas de anotacion de terminos GO de referencia
-```{r modificacion IDs}
-#arreglo los nombres en la columna `target_id` de `CAPte_trinnotate_annot` para que coincidan con el formato de ID de los resultados
-CAPte_trinotate_annot$target_id <- gsub(".*_(\\w+\\.\\d+)_.*", "\\1", CAPte_trinotate_annot$target_id)
-head(CAPte_trinotate_annot)
-```
-
-```{r preparacion tabla}
-#Extraigola tabla GO blastx de la tabla de anotaciones de Trinotate
-CAPte_annot_BLASTX_GO <- CAPte_trinotate_annot %>% 
-  dplyr::select(target_id, gene_ontology_BLASTX) %>% 
-  filter(!(is.na(gene_ontology_BLASTX)))
-
-#ver el largo de la lista para la preasignacion de memoria con el largo de la columna target_id porque se va a asociar el target_id con los terminos GO
-nrows <- length(CAPte_annot_BLASTX_GO$target_id)
-
-#Seleccionar y conservar solo el patron `GO:######`, remuevo el texto correpondiente a la clase de ontologia (proceso biologico, funcion molecular, etc.)
-pattern <- 'GO:[:digit:]{7}'
-
-#creo una variable llamada "myList" en la cual se pondra la lista de terminos GO
-myList <- list()
-
-#Hacer que el largo de "myList" sea igual al de "nrows"; la lista de target ids sera equivalente en largo a la lista de terminos GO para cada target_id
-length(myList) <- length(nrows)
-
-#creo una lista de target ids. No se incluyen los taget ids que no esten identificados con un nombre
-targetNames <- character(nrows)
-
-#Ahora tenemos una lista de todos los target ids identidificados 
-#Recorrer el gene_ontology_blast para identificar y retener solo los términos GO 
-for(i in 1:nrows){
-    #se mueve atraves de la columna target_id y manda los nombres a una lista llamada 'targetNames' 
-  targetNames[i] <- CAPte_annot_BLASTX_GO$target_id[i]
-  
-  #Recorrer la columna que contiene los términos GO que queremos analizar y genera una lista con los elementos de salida
-  GOblastCol <- CAPte_annot_BLASTX_GO$gene_ontology_BLASTX[i] 
-  
-  #genera un vector en cadena que coincide con el patron GO:####### de GOblastCol
-  GOtermVec <- as.vector(c(stringr::str_match_all(GOblastCol, pattern)[[1]]))
-  
-  #completa myList con el vector de terminos GO listados para cada target
-  myList[[i]] <- GOtermVec
-}
-names(myList) <- targetNames
-
-#convierte la lista de nombres a una tabla
-CAPte_go_blastx_annotations <- data.frame(lapply(myList, "length<-", max(lengths(myList)))) %>%
-  pivot_longer(1:length(targetNames), names_to = "target_id", values_to = "go_id") %>%
-  filter(!(is.na(go_id)))
-
-head(CAPte_go_blastx_annotations)
-
-#Extraigo la tabla de GO blastp de la tabla de anotaciones de Trinotate
-CAPte_annot_BLASTP_GO <- CAPte_trinotate_annot %>% 
-  dplyr::select(target_id, gene_ontology_BLASTP) %>% 
-  filter(!(is.na(gene_ontology_BLASTP)))
-
-#ver el largo de la lista para la preasignacion de memoria con el largo de la columna target_id porque se va a asociar el target_id con los terminos GO
-nrows <- length(CAPte_annot_BLASTP_GO$target_id)
-
-#Seleccionar y conservar solo el patron `GO:######`, remuevo el texto correpondiente a la clase de ontologia (proceso biologico, funcion molecular, etc.)
-pattern <- 'GO:[:digit:]{7}'
-
-#creo una variable llamada "myList" en la cual se pondra la lista de terminos GO
-myList <- list()
-
-#Hacer que el largo de "myList" sea igual al de "nrows"; la lista de target ids sera equivalente en largo a la lista de terminos GO para cada target_id
-length(myList) <- length(nrows)
-
-#creo una lista de target ids. No se incluyen los taget ids que no esten identificados con un nombre
-targetNames <- character(nrows)
-
-#Ahora tenemos una lista de todos los target ids identidificados 
-#Recorrer el gene_ontology_blast para identificar y retener solo los términos GO 
-for(i in 1:nrows){
-    #se mueve atraves de la columna target_id y manda los nombres a una lista llamada 'targetNames' 
-  targetNames[i] <- CAPte_annot_BLASTP_GO$target_id[i]
-  
-  #Recorrer la columna que contiene los términos GO que queremos analizar y genera una lista con los elementos de salida
-  GOblastCol <- CAPte_annot_BLASTP_GO$gene_ontology_BLASTP[i] 
-  
-  #genera un vector en cadena que coincide con el patron GO:####### de GOblastCol
-  GOtermVec <- as.vector(c(stringr::str_match_all(GOblastCol, pattern)[[1]]))
-  
-  #completa myList con el vector de terminos GO listados para cada target
-  myList[[i]] <- GOtermVec
-}
-names(myList) <- targetNames
-
-#convierte la lista de nombres a una tabla
-CAPte_go_blastp_annotations <- data.frame(lapply(myList, "length<-", max(lengths(myList)))) %>%
-  pivot_longer(1:length(targetNames), names_to = "target_id", values_to = "go_id") %>%
-  filter(!(is.na(go_id)))
-
-head(CAPte_go_blastp_annotations)
-
-#Uno ambas tablas y remuevo duplicados
-CAPte_go_annotations <- bind_rows(CAPte_go_blastx_annotations, CAPte_go_blastp_annotations)
-CAPte_go_annotations <- CAPte_go_annotations[!duplicated(CAPte_go_annotations),]#249995
-
-```
-
-## edgeR
-```{r preparo los archivos de entrada con el ranking de pvalor}
-res_1.2.tib <- res_1.2 %>%
-  rownames_to_column(var = "gene_id") %>%
-  as_tibble()
-head(res_1.2.tib)
-
-res_1.3.tib <- as_tibble(res_1.3 , rownames = "gene_id")
-head(res_1.3.tib)
-
-res_2.3.tib <- as_tibble(res_2.3 , rownames = "gene_id")
-head(res_2.3.tib)
-
-#Right_join
-res_1.2.Rjoin <- right_join(res_1.2.tib, nai_to_cap_table_sinP, by = "gene_id", keep = F)
-res_1.2.tib <- res_1.2.Rjoin %>%
-  dplyr::select(gene_id, target_id, PValue, logFC)
-# Filtrar logFC positivos
-res_1.2.tib_positivos <- res_1.2.tib %>%
-  filter(logFC > 0)
-# Filtrar logFC negativos
-res_1.2.tib_negativos <- res_1.2.tib %>%
-  filter(logFC < 0)
-
-res_1.3.Rjoin <- right_join(res_1.3.tib, nai_to_cap_table_sinP, by = "gene_id", keep = F)
-res_1.3.tib <- res_1.3.Rjoin %>%
-  dplyr::select(gene_id, target_id, PValue, logFC)
-# Filtrar logFC positivos
-res_1.3.tib_positivos <- res_1.3.tib %>%
-  filter(logFC > 0)
-# Filtrar logFC negativos
-res_1.3.tib_negativos <- res_1.3.tib %>%
-  filter(logFC < 0)
-
-res_2.3.Rjoin <- right_join(res_2.3.tib, nai_to_cap_table_sinP, by = "gene_id", keep = F)
-res_2.3.tib <- res_2.3.Rjoin %>%
-  dplyr::select(gene_id, target_id, PValue, logFC)
-# Filtrar logFC positivos
-res_2.3.tib_positivos <- res_2.3.tib %>%
-  filter(logFC > 0)
-# Filtrar logFC negativos
-res_2.3.tib_negativos <- res_2.3.tib %>%
-  filter(logFC < 0)
-
-# Generate input dataframe: extract genes y pvalues de los resultados de edgeR 
-#
-input_D1_vs_D2_positivos <- res_1.2.tib_positivos %>%
-  filter(!(is.na(PValue))) %>% 
-  dplyr::select (target_id, PValue) %>% 
-  as.data.frame()
-input_D1_vs_D2_positivos <- input_D1_vs_D2_positivos %>%
-  distinct(across(c(target_id)), .keep_all = TRUE)#69
-length(unique(input_D1_vs_D2_positivos$target_id))==length(input_D1_vs_D2_positivos$target_id)#TRUE
-
-input_D1_vs_D2_negativos <- res_1.2.tib_negativos %>%
-  filter(!(is.na(PValue))) %>% 
-  dplyr::select (target_id, PValue) %>% 
-  as.data.frame()
-input_D1_vs_D2_negativos <- input_D1_vs_D2_negativos %>%
-  distinct(across(c(target_id)), .keep_all = TRUE)#197
-length(unique(input_D1_vs_D2_negativos$target_id))==length(input_D1_vs_D2_negativos$target_id)#TRUE
-
-#
-input_D1_vs_D3_positivos <- res_1.3.tib_positivos %>%
-  filter(!(is.na(PValue))) %>% 
-  dplyr::select (target_id, PValue) %>% 
-  as.data.frame()
-input_D1_vs_D3_positivos <- input_D1_vs_D3_positivos %>%
-  distinct(across(c(target_id)), .keep_all = TRUE)#250
-length(unique(input_D1_vs_D3_positivos$target_id))==length(input_D1_vs_D3_positivos$target_id)#TRUE
-
-input_D1_vs_D3_negativos <- res_1.3.tib_negativos %>%
-  filter(!(is.na(PValue))) %>% 
-  dplyr::select (target_id, PValue) %>% 
-  as.data.frame()
-input_D1_vs_D3_negativos <- input_D1_vs_D3_negativos %>%
-  distinct(across(c(target_id)), .keep_all = TRUE)#394
-length(unique(input_D1_vs_D3_negativos$target_id))==length(input_D1_vs_D3_negativos$target_id)#TRUE
-
-#
-input_D2_vs_D3_positivos <- res_2.3.tib_positivos %>%
-  filter(!(is.na(PValue))) %>% 
-  dplyr::select (target_id, PValue) %>% 
-  as.data.frame()
-input_D2_vs_D3_positivos <- input_D2_vs_D3_positivos %>%
-  distinct(across(c(target_id)), .keep_all = TRUE)#76
-length(unique(input_D2_vs_D3_positivos$target_id))==length(input_D2_vs_D3_positivos$target_id)#TRUE
-
-input_D2_vs_D3_negativos <- res_2.3.tib_negativos %>%
-  filter(!(is.na(PValue))) %>% 
-  dplyr::select (target_id, PValue) %>% 
-  as.data.frame()
-input_D2_vs_D3_negativos <- input_D2_vs_D3_negativos %>%
-  distinct(across(c(target_id)), .keep_all = TRUE)#75
-length(unique(input_D2_vs_D3_negativos$target_id))==length(input_D2_vs_D3_negativos$target_id)#TRUE
-
-```
-
-#GO TESTS
-```{r Perform pvalue rank GO enrichment tests, eval = FALSE}
-
-#Hacer sum-rank tests de Wilcoxon
-#WARNING!!! Estos tests llevan mucho tiempo, para evitar correrlos cada vez el objeto de resultados de los test se guardan en un archivo .RData para poder cargarlo luego sin volver a correr el test.
-
-#IF THIS IS THE FIRST TIME RUNNING THE CODE IN THE CURRENT ENVIRONMENT, CHANGE 'eval' to TRUE IN THE CHUNK HEADER
-
-#dia 1vs2
-res_D1_vs_D2_positivos_wilcox_pvalue <- go_enrich(input_D1_vs_D2_positivos, test = "wilcoxon", n_randsets = 1000, 
-                                          annotations = as.data.frame(CAPte_go_annotations))
-save(res_D1_vs_D2_positivos_wilcox_pvalue, file = "res_D1_vs_D2_positivos_wilcox_pvalue.Rdata")
-
-res_D1_vs_D2_negativos_wilcox_pvalue <- go_enrich(input_D1_vs_D2_negativos, test = "wilcoxon", n_randsets = 1000, 
-                                          annotations = as.data.frame(CAPte_go_annotations))
-save(res_D1_vs_D2_negativos_wilcox_pvalue, file = "res_D1_vs_D2_negativos_wilcox_pvalue.Rdata")
-
-
-#dia 1vs3
-res_D1_vs_D3_positivos_wilcox_pvalue <- go_enrich(input_D1_vs_D3_positivos, test = "wilcoxon", n_randsets = 1000, 
-                                          annotations = as.data.frame(CAPte_go_annotations))
-save(res_D1_vs_D3_positivos_wilcox_pvalue, file = "res_D1_vs_D3_positivos_wilcox_pvalue.Rdata")
-
-res_D1_vs_D3_negativos_wilcox_pvalue <- go_enrich(input_D1_vs_D3_negativos, test = "wilcoxon", n_randsets = 1000, 
-                                          annotations = as.data.frame(CAPte_go_annotations))
-save(res_D1_vs_D3_negativos_wilcox_pvalue, file = "res_D1_vs_D3_negativos_wilcox_pvalue.Rdata")
-
-#dia 2vs3
-res_D2_vs_D3_positivos_wilcox_pvalue <- go_enrich(input_D2_vs_D3_positivos, test = "wilcoxon", n_randsets = 1000, 
-                                          annotations = as.data.frame(CAPte_go_annotations))
-save(res_D2_vs_D3_positivos_wilcox_pvalue, file = "res_D2_vs_D3_positivos_wilcox_pvalue.Rdata")
-
-res_D2_vs_D3_negativos_wilcox_pvalue <- go_enrich(input_D2_vs_D3_negativos, test = "wilcoxon", n_randsets = 1000, 
-                                          annotations = as.data.frame(CAPte_go_annotations))
-save(res_D2_vs_D3_negativos_wilcox_pvalue, file = "res_D2_vs_D3_negativos_wilcox_pvalue.Rdata")
-
-
-#Guardar todo en archivos externos
-write_tsv(res_D1_vs_D2_positivos_wilcox_pvalue[[1]], "res_D1_vs_D2_positivos_wilcox_pvalue_GO_enrich.results.tsv")
-write_tsv(res_D1_vs_D2_negativos_wilcox_pvalue[[1]], "res_D1_vs_D2_negativos_wilcox_pvalue_GO_enrich.results.tsv")
-
-write_tsv(res_D1_vs_D3_positivos_wilcox_pvalue[[1]], "res_D1_vs_D3_positivos_wilcox_pvalue_GO_enrich.results.tsv")
-write_tsv(res_D1_vs_D3_negativos_wilcox_pvalue[[1]], "res_D1_vs_D3_negativos_wilcox_pvalue_GO_enrich.results.tsv")
-
-write_tsv(res_D2_vs_D3_positivos_wilcox_pvalue[[1]], "res_D2_vs_D3_positivos_wilcox_pvalue_GO_enrich.results.tsv")
-write_tsv(res_D2_vs_D3_negativos_wilcox_pvalue[[1]], "res_D2_vs_D3_negativos_wilcox_pvalue_GO_enrich.results.tsv")
-```
-
-```{r Load GO test results}
-load("res_D1_vs_D2_positivos_wilcox_pvalue.Rdata")
-load("res_D1_vs_D2_negativos_wilcox_pvalue.Rdata")
-
-load("res_D1_vs_D3_positivos_wilcox_pvalue.Rdata")
-load("res_D1_vs_D3_negativos_wilcox_pvalue.Rdata")
-
-load("res_D2_vs_D3_positivos_wilcox_pvalue.Rdata")
-load("res_D2_vs_D3_negativos_wilcox_pvalue.Rdata")
-```
-
-### ontologia PROCESOS BIOLOGICOS, enriquecimiento de terminos GO
-```{r Generate GO Biological Process enrichment tables}
-#Generate tables comparing Biological Process terms
-go_table_D1_vs_D2_positivos_BP <-
-res_D1_vs_D2_positivos_wilcox_pvalue[[1]] %>% as_tibble %>%
-  filter(FWER_low_rank<=0.05, ontology=="biological_process") %>%
-  dplyr::select(-raw_p_high_rank ,-FWER_high_rank, -ontology) %>%
-  arrange(FWER_low_rank)
-gt_go_table_D1_vs_D2_positivos_BP <- gt(go_table_D1_vs_D2_positivos_BP) %>%
-  tab_header(
-    title = "Procesos biologicos - Terminos enriquecidos",
-    subtitle = md("Dia 1 vs Dia 2 - positivos"))
-go_table_D1_vs_D2_negativos_BP <-
-res_D1_vs_D2_negativos_wilcox_pvalue[[1]] %>% as_tibble %>%
-  filter(FWER_low_rank<=0.05, ontology=="biological_process") %>%
-  dplyr::select(-raw_p_high_rank ,-FWER_high_rank, -ontology) %>%
-  arrange(FWER_low_rank)
-gt_go_table_D1_vs_D2_negativos_BP <- gt(go_table_D1_vs_D2_negativos_BP) %>%
-  tab_header(
-    title = "Procesos biologicos - Terminos enriquecidos",
-    subtitle = md("Dia 1 vs Dia 2 - negativos"))
-
-
-
-go_table_D1_vs_D3_positivos_BP <-
-res_D1_vs_D3_positivos_wilcox_pvalue[[1]] %>% as_tibble %>%
-  filter(FWER_low_rank<=0.05, ontology=="biological_process") %>%
-  dplyr::select(-raw_p_high_rank ,-FWER_high_rank, -ontology) %>%
-  arrange(FWER_low_rank)
-gt_go_table_D1_vs_D3_positivos_BP <- gt(go_table_D1_vs_D3_positivos_BP) %>%
-  tab_header(
-    title = "Procesos biologicos - Terminos enriquecidos",
-    subtitle = md("Dia 1 vs Dia 3 - positivos"))
-go_table_D1_vs_D3_negativos_BP <-
-res_D1_vs_D3_negativos_wilcox_pvalue[[1]] %>% as_tibble %>%
-  filter(FWER_low_rank<=0.05, ontology=="biological_process") %>%
-  dplyr::select(-raw_p_high_rank ,-FWER_high_rank, -ontology) %>%
-  arrange(FWER_low_rank)
-gt_go_table_D1_vs_D3_negativos_BP <- gt(go_table_D1_vs_D3_negativos_BP) %>%
-  tab_header(
-    title = "Procesos biologicos - Terminos enriquecidos",
-    subtitle = md("Dia 1 vs Dia 3 - negativos"))
-
-
-
-go_table_D2_vs_D3_positivos_BP <-
-res_D2_vs_D3_positivos_wilcox_pvalue[[1]] %>% as_tibble %>%
-  filter(FWER_low_rank<=0.05, ontology=="biological_process") %>%
-  dplyr::select(-raw_p_high_rank ,-FWER_high_rank, -ontology) %>%
-  arrange(FWER_low_rank)
-gt_go_table_D2_vs_D3_positivos_BP <- gt(go_table_D2_vs_D3_positivos_BP) %>%
-  tab_header(
-    title = "Procesos biologicos - Terminos enriquecidos",
-    subtitle = md("Dia 2 vs Dia 3 - positivos"))
-go_table_D2_vs_D3_negativos_BP <-
-res_D2_vs_D3_negativos_wilcox_pvalue[[1]] %>% as_tibble %>%
-  filter(FWER_low_rank<=0.05, ontology=="biological_process") %>%
-  dplyr::select(-raw_p_high_rank ,-FWER_high_rank, -ontology) %>%
-  arrange(FWER_low_rank)
-gt_go_table_D2_vs_D3_negativos_BP <- gt(go_table_D2_vs_D3_negativos_BP) %>%
-  tab_header(
-    title = "Procesos biologicos - Terminos enriquecidos",
-    subtitle = md("Dia 2 vs Dia 3 - negativos"))
-```
-
-##Graficos
-```{r GRAFICO}
-# Accedemos a las tablas "results" dentro de las listas y excluimos las entradas que corresponden a componente celular
-results_table_1.2_positivos <- res_D1_vs_D2_positivos_wilcox_pvalue$results %>%
-  filter(ontology != "cellular_component")
-results_table_1.2_negativos <- res_D1_vs_D2_negativos_wilcox_pvalue$results %>%
-  filter(ontology != "cellular_component")
-
-results_table_1.3_positivos <- res_D1_vs_D3_positivos_wilcox_pvalue$results %>%
-  filter(ontology != "cellular_component")
-results_table_1.3_negativos <- res_D1_vs_D3_negativos_wilcox_pvalue$results %>%
-  filter(ontology != "cellular_component")
-
-results_table_2.3_positivos <- res_D2_vs_D3_positivos_wilcox_pvalue$results %>%
-  filter(ontology != "cellular_component")
-results_table_2.3_negativos <- res_D2_vs_D3_negativos_wilcox_pvalue$results %>%
-  filter(ontology != "cellular_component")
-
-#results_table_seleccionado <- results_table_2.3 %>% select(node_id, raw_p_high_rank)
-#write.csv(results_table_seleccionado, "results_table_2.3.csv", row.names = FALSE)
-
-#subset de los top 20 terminos
-top_terms_1.2_positivos <- results_table_1.2_positivos[1:20, ]
-top_terms_1.2_negativos <- results_table_1.2_negativos[1:20, ]
-
-top_terms_1.3_positivos <- results_table_1.3_positivos[1:20, ]
-top_terms_1.3_negativos <- results_table_1.3_negativos[1:20, ]
-
-top_terms_2.3_positivos <- results_table_2.3_positivos[1:20, ]
-top_terms_2.3_negativos <- results_table_2.3_negativos[1:20, ]
-
-#graficos
-custom_colors <- c(
-  "biological_process" = "salmon",  
-  "molecular_function" = "snow3")
-
-ggplot(top_terms_1.2_positivos, aes(x = reorder(node_name, -FWER_high_rank), y = -log10(FWER_high_rank), fill = ontology)) +
-    geom_bar(stat = "identity") +
-    coord_flip() +
-    labs(title = "Top 20 Términos de enriquecimiento GO 1vs2 - positivos",
-         x = "Términos GO",
-         y = "-log10(FWER_high_rank)",
-         fill = "Ontology") +
-    theme_minimal() +
-    theme(axis.text.y = element_text(size = 8)) +  # Ajusta el tamaño del texto
-    facet_wrap(~ ontology, scales = "free_y", ncol = 1) + # Agrupa por ontología en diferentes paneles
-  scale_fill_manual(values = custom_colors)
-ggplot(top_terms_1.2_negativos, aes(x = reorder(node_name, -FWER_high_rank), y = -log10(FWER_high_rank), fill = ontology)) +
-    geom_bar(stat = "identity") +
-    coord_flip() +
-    labs(title = "Top 20 Términos de enriquecimiento GO 1vs2 - negativos",
-         x = "Términos GO",
-         y = "-log10(FWER_high_rank)",
-         fill = "Ontology") +
-    theme_minimal() +
-    theme(axis.text.y = element_text(size = 8)) +  # Ajusta el tamaño del texto
-    facet_wrap(~ ontology, scales = "free_y", ncol = 1) + # Agrupa por ontología en diferentes paneles
-  scale_fill_manual(values = custom_colors)
-
-
-ggplot(top_terms_1.3_positivos, aes(x = reorder(node_name, -FWER_high_rank), y = -log10(FWER_high_rank), fill = ontology)) +
-    geom_bar(stat = "identity") +
-    coord_flip() +
-    labs(title = "Top 20 Términos de enriquecimiento GO 1vs3 - positivos",
-         x = "Términos GO",
-         y = "-log10(FWER_high_rank)",
-         fill = "Ontology") +
-    theme_minimal() +
-    theme(axis.text.y = element_text(size = 8)) +  # Ajusta el tamaño del texto
-    facet_wrap(~ ontology, scales = "free_y", ncol = 1) + # Agrupa por ontología en diferentes paneles
-  scale_fill_manual(values = custom_colors)
-ggplot(top_terms_1.3_negativos, aes(x = reorder(node_name, -FWER_high_rank), y = -log10(FWER_high_rank), fill = ontology)) +
-    geom_bar(stat = "identity") +
-    coord_flip() +
-    labs(title = "Top 20 Términos de enriquecimiento GO 1vs3 - negativos",
-         x = "Términos GO",
-         y = "-log10(FWER_high_rank)",
-         fill = "Ontology") +
-    theme_minimal() +
-    theme(axis.text.y = element_text(size = 8)) +  # Ajusta el tamaño del texto
-    facet_wrap(~ ontology, scales = "free_y", ncol = 1) + # Agrupa por ontología en diferentes paneles
-  scale_fill_manual(values = custom_colors)
-
-
-ggplot(top_terms_2.3_positivos, aes(x = reorder(node_name, -FWER_high_rank), y = -log10(FWER_high_rank), fill = ontology)) +
-    geom_bar(stat = "identity") +
-    coord_flip() +
-    labs(title = "Top 20 Términos de enriquecimiento GO 2vs3 - positivos",
-         x = "Términos GO",
-         y = "-log10(FWER_high_rank)",
-         fill = "Ontology") +
-    theme_minimal() +
-    theme(axis.text.y = element_text(size = 8)) +  # Ajusta el tamaño del texto
-    facet_wrap(~ ontology, scales = "free_y", ncol = 1) + # Agrupa por ontología en diferentes paneles
-  scale_fill_manual(values = custom_colors)
-ggplot(top_terms_2.3_negativos, aes(x = reorder(node_name, -FWER_high_rank), y = -log10(FWER_high_rank), fill = ontology)) +
-    geom_bar(stat = "identity") +
-    coord_flip() +
-    labs(title = "Top 20 Términos de enriquecimiento GO 2vs3 - negativos",
-         x = "Términos GO",
-         y = "-log10(FWER_high_rank)",
-         fill = "Ontology") +
-    theme_minimal() +
-    theme(axis.text.y = element_text(size = 8)) +  # Ajusta el tamaño del texto
-    facet_wrap(~ ontology, scales = "free_y", ncol = 1) + # Agrupa por ontología en diferentes paneles
-  scale_fill_manual(values = custom_colors)
-```
-
-## NOISeq
-
-```{r preparo los archivos de entrada con el ranking de prob}
-NOI_res_1.2.tib <- NOI_res_deg_1.2 %>%
-  rownames_to_column(var = "gene_id") %>%
-  as_tibble()
-head(NOI_res_1.2.tib)
-
-NOI_res_1.3.tib <- as_tibble(NOI_res_deg_1.3 , rownames = "gene_id")
-head(NOI_res_1.3.tib)
-
-NOI_res_2.3.tib <- as_tibble(NOI_res_deg_2.3 , rownames = "gene_id")
-head(NOI_res_2.3.tib)
-
-#Right_join
-NOI_res_1.2.Rjoin <- right_join(NOI_res_1.2.tib, nai_to_cap_table_sinP, by = "gene_id", keep = F)
-NOI_res_1.2.tib <- NOI_res_1.2.Rjoin %>%
-  dplyr::select(gene_id, target_id, prob, M)
-# Filtrar M positivos
-NOI_res_1.2.tib_positivos <- NOI_res_1.2.tib %>%
-  filter(M > 0)
-# Filtrar M negativos
-NOI_res_1.2.tib_negativos <- NOI_res_1.2.tib %>%
-  filter(M < 0)
-
-NOI_res_1.3.Rjoin <- right_join(NOI_res_1.3.tib, nai_to_cap_table_sinP, by = "gene_id", keep = F)
-NOI_res_1.3.tib <- NOI_res_1.3.Rjoin %>%
-  dplyr::select(gene_id, target_id, prob, M)
-# Filtrar M positivos
-NOI_res_1.3.tib_positivos <- NOI_res_1.3.tib %>%
-  filter(M > 0)
-# Filtrar M negativos
-NOI_res_1.3.tib_negativos <- NOI_res_1.3.tib %>%
-  filter(M < 0)
-
-NOI_res_2.3.Rjoin <- right_join(NOI_res_2.3.tib, nai_to_cap_table_sinP, by = "gene_id", keep = F)
-NOI_res_2.3.tib <- NOI_res_2.3.Rjoin %>%
-  dplyr::select(gene_id, target_id, prob, M)
-# Filtrar M positivos
-NOI_res_2.3.tib_positivos <- NOI_res_2.3.tib %>%
-  filter(M > 0)
-# Filtrar M negativos
-NOI_res_2.3.tib_negativos <- NOI_res_2.3.tib %>%
-  filter(M < 0)
-
-# Generate input dataframe: extract genes and prob's from NOISeq results 
-inputNOI_D1_vs_D2_positivos <- NOI_res_1.2.tib_positivos %>%
-  filter(!(is.na(prob))) %>% 
-  dplyr::select (target_id, prob) %>% 
-  as.data.frame()
-inputNOI_D1_vs_D2_positivos <- inputNOI_D1_vs_D2_positivos %>%
-  distinct(across(c(target_id)), .keep_all = TRUE)#353
-length(unique(inputNOI_D1_vs_D2_positivos$target_id))==length(inputNOI_D1_vs_D2_positivos$target_id)#TRUE
-
-inputNOI_D1_vs_D2_negativos <- NOI_res_1.2.tib_negativos %>%
-  filter(!(is.na(prob))) %>% 
-  dplyr::select (target_id, prob) %>% 
-  as.data.frame()
-inputNOI_D1_vs_D2_negativos <- inputNOI_D1_vs_D2_negativos %>%
-  distinct(across(c(target_id)), .keep_all = TRUE)#803
-length(unique(inputNOI_D1_vs_D2_negativos$target_id))==length(inputNOI_D1_vs_D2_negativos$target_id)#TRUE
-
-
-inputNOI_D1_vs_D3_positivos <- NOI_res_1.3.tib_positivos %>%
-  filter(!(is.na(prob))) %>% 
-  dplyr::select (target_id, prob) %>% 
-  as.data.frame()
-inputNOI_D1_vs_D3_positivos <- inputNOI_D1_vs_D3_positivos %>%
-  distinct(across(c(target_id)), .keep_all = TRUE)#648
-length(unique(inputNOI_D1_vs_D3_positivos$target_id))==length(inputNOI_D1_vs_D3_positivos$target_id)#TRUE
-
-inputNOI_D1_vs_D3_negativos <- NOI_res_1.3.tib_negativos %>%
-  filter(!(is.na(prob))) %>% 
-  dplyr::select (target_id, prob) %>% 
-  as.data.frame()
-inputNOI_D1_vs_D3_negativos <- inputNOI_D1_vs_D3_negativos %>%
-  distinct(across(c(target_id)), .keep_all = TRUE)#1260
-length(unique(inputNOI_D1_vs_D3_negativos$target_id))==length(inputNOI_D1_vs_D3_negativos$target_id)#TRUE
-
-
-inputNOI_D2_vs_D3_positivos <- NOI_res_2.3.tib_positivos %>%
-  filter(!(is.na(prob))) %>% 
-  dplyr::select (target_id, prob) %>% 
-  as.data.frame()
-inputNOI_D2_vs_D3_positivos <- inputNOI_D2_vs_D3_positivos %>%
-  distinct(across(c(target_id)), .keep_all = TRUE)#505
-length(unique(inputNOI_D2_vs_D3_positivos$target_id))==length(inputNOI_D2_vs_D3_positivos$target_id)#TRUE
-
-inputNOI_D2_vs_D3_negativos <- NOI_res_2.3.tib_negativos %>%
-  filter(!(is.na(prob))) %>% 
-  dplyr::select (target_id, prob) %>% 
-  as.data.frame()
-inputNOI_D2_vs_D3_negativos <- inputNOI_D2_vs_D3_negativos %>%
-  distinct(across(c(target_id)), .keep_all = TRUE)#641
-length(unique(inputNOI_D2_vs_D3_negativos$target_id))==length(inputNOI_D2_vs_D3_negativos$target_id)#TRUE
-
-```
-
-#GO TESTS
-
-```{r hacer test de enriquecimiento de terminos GO, eval = FALSE}
-#Hacer sum-rank tests de Wilcoxon
-#WARNING!!! Estos tests llevan mucho tiempo, para evitar correrlos cada vez el objeto de resultados de los test se guardan en un archivo .RData para poder cargarlo luego sin volver a correr el test.
-
-#IF THIS IS THE FIRST TIME RUNNING THE CODE IN THE CURRENT ENVIRONMENT, CHANGE 'eval' to TRUE IN THE CHUNK HEADER
-#1.2
-NOI_res_D1_vs_D2_positivos_wilcox_pvalue <- go_enrich(inputNOI_D1_vs_D2_positivos, test = "wilcoxon", n_randsets = 1000, 
-                                          annotations = as.data.frame(CAPte_go_annotations))
-save(NOI_res_D1_vs_D2_positivos_wilcox_pvalue, file = "NOI_res_D1_vs_D2_positivos_wilcox_pvalue.Rdata")
-
-NOI_res_D1_vs_D2_negativos_wilcox_pvalue <- go_enrich(inputNOI_D1_vs_D2_negativos, test = "wilcoxon", n_randsets = 1000, 
-                                          annotations = as.data.frame(CAPte_go_annotations))
-save(NOI_res_D1_vs_D2_negativos_wilcox_pvalue, file = "NOI_res_D1_vs_D2_negativos_wilcox_pvalue.Rdata")
-
-
-#1.3
-NOI_res_D1_vs_D3_positivos_wilcox_pvalue <- go_enrich(inputNOI_D1_vs_D3_positivos, test = "wilcoxon", n_randsets = 1000, 
-                                          annotations = as.data.frame(CAPte_go_annotations))
-save(NOI_res_D1_vs_D3_positivos_wilcox_pvalue, file = "NOI_res_D1_vs_D3_positivos_wilcox_pvalue.Rdata")
-
-NOI_res_D1_vs_D3_negativos_wilcox_pvalue <- go_enrich(inputNOI_D1_vs_D3_negativos, test = "wilcoxon", n_randsets = 1000, 
-                                          annotations = as.data.frame(CAPte_go_annotations))
-save(NOI_res_D1_vs_D3_negativos_wilcox_pvalue, file = "NOI_res_D1_vs_D3_negativos_wilcox_pvalue.Rdata")
-
-
-#2.3
-NOI_res_D2_vs_D3_positivos_wilcox_pvalue <- go_enrich(inputNOI_D2_vs_D3_positivos, test = "wilcoxon", n_randsets = 1000, 
-                                          annotations = as.data.frame(CAPte_go_annotations))
-save(NOI_res_D2_vs_D3_positivos_wilcox_pvalue, file = "NOI_res_D2_vs_D3_positivos_wilcox_pvalue.Rdata")
-
-NOI_res_D2_vs_D3_negativos_wilcox_pvalue <- go_enrich(inputNOI_D2_vs_D3_negativos, test = "wilcoxon", n_randsets = 1000, 
-                                          annotations = as.data.frame(CAPte_go_annotations))
-save(NOI_res_D2_vs_D3_negativos_wilcox_pvalue, file = "NOI_res_D2_vs_D3_negativos_wilcox_pvalue.Rdata")
-
-#Guardar todo en archivos externos
-write_tsv(NOI_res_D1_vs_D2_positivos_wilcox_pvalue[[1]], "NOI_res_D1_vs_D2_positivos_wilcox_pvalue_GO_enrich.results.tsv")
-write_tsv(NOI_res_D1_vs_D2_negativos_wilcox_pvalue[[1]], "NOI_res_D1_vs_D2_negativos_wilcox_pvalue_GO_enrich.results.tsv")
-
-write_tsv(NOI_res_D1_vs_D3_positivos_wilcox_pvalue[[1]], "NOI_res_D1_vs_D3_positivos_wilcox_pvalue_GO_enrich.results.tsv")
-write_tsv(NOI_res_D1_vs_D3_negativos_wilcox_pvalue[[1]], "NOI_res_D1_vs_D3_negativos_wilcox_pvalue_GO_enrich.results.tsv")
-
-write_tsv(NOI_res_D2_vs_D3_positivos_wilcox_pvalue[[1]], "NOI_res_D2_vs_D3_positivos_wilcox_pvalue_GO_enrich.results.tsv")
-write_tsv(NOI_res_D2_vs_D3_negativos_wilcox_pvalue[[1]], "NOI_res_D2_vs_D3_negativos_wilcox_pvalue_GO_enrich.results.tsv")
-```
-
-```{r Cargar resultados de tests GO}
-load("NOI_res_D1_vs_D2_positivos_wilcox_pvalue.Rdata")
-load("NOI_res_D1_vs_D2_negativos_wilcox_pvalue.Rdata")
-
-load("NOI_res_D1_vs_D3_positivos_wilcox_pvalue.Rdata")
-load("NOI_res_D1_vs_D3_negativos_wilcox_pvalue.Rdata")
-
-load("NOI_res_D2_vs_D3_positivos_wilcox_pvalue.Rdata")
-load("NOI_res_D2_vs_D3_negativos_wilcox_pvalue.Rdata")
-```
-
-### ontologia PROCESOS BIOLOGICOS, enriquecimiento de terminos GO
-```{r Generate GO Biological Process enrichment tables}
-#Generate tables comparing Biological Process terms
-#1.2
-go_NOI_table_D1_vs_D2_positivos_BP <-
-NOI_res_D1_vs_D2_positivos_wilcox_pvalue[[1]] %>% as_tibble %>%
-  filter(FWER_low_rank<=0.05, ontology=="biological_process") %>%
-  dplyr::select(-raw_p_high_rank ,-FWER_high_rank, -ontology) %>%
-  arrange(FWER_low_rank)
-
-gt_go_NOI_table_D1_vs_D2_positivos_BP <- gt(go_NOI_table_D1_vs_D2_positivos_BP) %>%
-  tab_header(
-    title = "Procesos biologicos - Terminos enriquecidos",
-    subtitle = md("Dia 1 vs Dia 2")
-  )
-
-go_NOI_table_D1_vs_D2_negativos_BP <-
-NOI_res_D1_vs_D2_negativos_wilcox_pvalue[[1]] %>% as_tibble %>%
-  filter(FWER_low_rank<=0.05, ontology=="biological_process") %>%
-  dplyr::select(-raw_p_high_rank ,-FWER_high_rank, -ontology) %>%
-  arrange(FWER_low_rank)
-
-gt_go_NOI_table_D1_vs_D2_negativos_BP <- gt(go_NOI_table_D1_vs_D2_negativos_BP) %>%
-  tab_header(
-    title = "Procesos biologicos - Terminos enriquecidos",
-    subtitle = md("Dia 1 vs Dia 2")
-  )
-
-#1.3
-go_NOI_table_D1_vs_D3_positivos_BP <-
-NOI_res_D1_vs_D3_positivos_wilcox_pvalue[[1]] %>% as_tibble %>%
-  filter(FWER_low_rank<=0.05, ontology=="biological_process") %>%
-  dplyr::select(-raw_p_high_rank ,-FWER_high_rank, -ontology) %>%
-  arrange(FWER_low_rank)
-
-gt_go_NOI_table_D1_vs_D3_positivos_BP <- gt(go_NOI_table_D1_vs_D3_positivos_BP) %>%
-  tab_header(
-    title = "Procesos biologicos - Terminos enriquecidos",
-    subtitle = md("Dia 1 vs Dia 3")
-  )
-
-go_NOI_table_D1_vs_D3_negativos_BP <-
-NOI_res_D1_vs_D3_negativos_wilcox_pvalue[[1]] %>% as_tibble %>%
-  filter(FWER_low_rank<=0.05, ontology=="biological_process") %>%
-  dplyr::select(-raw_p_high_rank ,-FWER_high_rank, -ontology) %>%
-  arrange(FWER_low_rank)
-
-gt_go_NOI_table_D1_vs_D3_negativos_BP <- gt(go_NOI_table_D1_vs_D3_negativos_BP) %>%
-  tab_header(
-    title = "Procesos biologicos - Terminos enriquecidos",
-    subtitle = md("Dia 1 vs Dia 3")
-  )
-
-#2.3
-go_NOI_table_D2_vs_D3_positivos_BP <-
-NOI_res_D2_vs_D3_positivos_wilcox_pvalue[[1]] %>% as_tibble %>%
-  filter(FWER_low_rank<=0.05, ontology=="biological_process") %>%
-  dplyr::select(-raw_p_high_rank ,-FWER_high_rank, -ontology) %>%
-  arrange(FWER_low_rank)
-
-gt_go_NOI_table_D2_vs_D3_positivos_BP <- gt(go_NOI_table_D2_vs_D3_positivos_BP) %>%
-  tab_header(
-    title = "Procesos biologicos - Terminos enriquecidos",
-    subtitle = md("Dia 2 vs Dia 3")
-  )
-
-go_NOI_table_D2_vs_D3_negativos_BP <-
-NOI_res_D2_vs_D3_negativos_wilcox_pvalue[[1]] %>% as_tibble %>%
-  filter(FWER_low_rank<=0.05, ontology=="biological_process") %>%
-  dplyr::select(-raw_p_high_rank ,-FWER_high_rank, -ontology) %>%
-  arrange(FWER_low_rank)
-
-gt_go_NOI_table_D2_vs_D3_negativos_BP <- gt(go_NOI_table_D2_vs_D3_negativos_BP) %>%
-  tab_header(
-    title = "Procesos biologicos - Terminos enriquecidos",
-    subtitle = md("Dia 2 vs Dia 3")
-  )
-
-```
-
-
-### ontologia FUNCION MOLECULAR, enriquecimiento de terminos GO
-```{r generar tablas de enriquecimiento GO de funcion molecular}
-#Generate tables comparing Molecular Function terms
-#1.2
-go_NOI_table_D1_vs_D2_positivos_MF <-
-NOI_res_D1_vs_D2_positivos_wilcox_pvalue[[1]] %>% as_tibble %>%
-  filter(FWER_low_rank<=0.05, ontology=="molecular_function") %>%
-  dplyr::select(-raw_p_high_rank ,-FWER_high_rank, -ontology) %>%
-  arrange(FWER_low_rank)
-
-gt_go_NOI_table_D1_vs_D2_positivos_MF <- gt(go_NOI_table_D1_vs_D2_positivos_MF) %>%
-  tab_header(
-    title = "Funcion molecular - Terminos enriquecidos",
-    subtitle = md("Dia 1 vs Dia 2")
-  )
-
-go_NOI_table_D1_vs_D2_negativos_MF <-
-NOI_res_D1_vs_D2_negativos_wilcox_pvalue[[1]] %>% as_tibble %>%
-  filter(FWER_low_rank<=0.05, ontology=="molecular_function") %>%
-  dplyr::select(-raw_p_high_rank ,-FWER_high_rank, -ontology) %>%
-  arrange(FWER_low_rank)
-
-gt_go_NOI_table_D1_vs_D2_negativos_MF <- gt(go_NOI_table_D1_vs_D2_negativos_MF) %>%
-  tab_header(
-    title = "Funcion molecular - Terminos enriquecidos",
-    subtitle = md("Dia 1 vs Dia 2")
-  )
-
-#1.3
-go_NOI_table_D1_vs_D3_positivos_MF <-
-NOI_res_D1_vs_D3_positivos_wilcox_pvalue[[1]] %>% as_tibble %>%
-  filter(FWER_low_rank<=0.05, ontology=="molecular_function") %>%
-  dplyr::select(-raw_p_high_rank ,-FWER_high_rank, -ontology) %>%
-  arrange(FWER_low_rank)
-
-gt_go_NOI_table_D1_vs_D3_positivos_MF <- gt(go_NOI_table_D1_vs_D3_positivos_MF) %>%
-  tab_header(
-    title = "Funcion molecular - Terminos enriquecidos",
-    subtitle = md("Dia 1 vs Dia 3")
-  )
-
-go_NOI_table_D1_vs_D3_negativos_MF <-
-NOI_res_D1_vs_D3_negativos_wilcox_pvalue[[1]] %>% as_tibble %>%
-  filter(FWER_low_rank<=0.05, ontology=="molecular_function") %>%
-  dplyr::select(-raw_p_high_rank ,-FWER_high_rank, -ontology) %>%
-  arrange(FWER_low_rank)
-
-gt_go_NOI_table_D1_vs_D3_negativos_MF <- gt(go_NOI_table_D1_vs_D3_negativos_MF) %>%
-  tab_header(
-    title = "Funcion molecular - Terminos enriquecidos",
-    subtitle = md("Dia 1 vs Dia 3")
-  )
-
-#2.3
-go_NOI_table_D2_vs_D3_positivos_MF <-
-NOI_res_D2_vs_D3_positivos_wilcox_pvalue[[1]] %>% as_tibble %>%
-  filter(FWER_low_rank<=0.05, ontology=="molecular_function") %>%
-  dplyr::select(-raw_p_high_rank ,-FWER_high_rank, -ontology) %>%
-  arrange(FWER_low_rank)
-
-gt_go_NOI_table_D2_vs_D3_positivos_MF <- gt(go_NOI_table_D2_vs_D3_positivos_MF) %>%
-  tab_header(
-    title = "Funcion molecular - Terminos enriquecidos",
-    subtitle = md("Dia 2 vs Dia 3")
-  )
-
-go_NOI_table_D2_vs_D3_negativos_MF <-
-NOI_res_D2_vs_D3_negativos_wilcox_pvalue[[1]] %>% as_tibble %>%
-  filter(FWER_low_rank<=0.05, ontology=="molecular_function") %>%
-  dplyr::select(-raw_p_high_rank ,-FWER_high_rank, -ontology) %>%
-  arrange(FWER_low_rank)
-
-gt_go_NOI_table_D2_vs_D3_negativos_MF <- gt(go_NOI_table_D2_vs_D3_negativos_MF) %>%
-  tab_header(
-    title = "Funcion molecular - Terminos enriquecidos",
-    subtitle = md("Dia 2 vs Dia 3")
-  )
-
-```
-
-##Graficos
-```{r GRAFICO}
-# Accedemos a las tablas "results" dentro de las listas
-NOI_results_table_1.2_positivos <- NOI_res_D1_vs_D2_positivos_wilcox_pvalue$results %>%
-  filter(ontology != "cellular_component")
-NOI_results_table_1.2_negativos <- NOI_res_D1_vs_D2_negativos_wilcox_pvalue$results %>%
-  filter(ontology != "cellular_component")
-
-NOI_results_table_1.3_positivos <- NOI_res_D1_vs_D3_positivos_wilcox_pvalue$results %>%
-  filter(ontology != "cellular_component")
-NOI_results_table_1.3_negativos <- NOI_res_D1_vs_D3_negativos_wilcox_pvalue$results %>%
-  filter(ontology != "cellular_component")
-
-NOI_results_table_2.3_positivos <- NOI_res_D2_vs_D3_positivos_wilcox_pvalue$results %>%
-  filter(ontology != "cellular_component")
-NOI_results_table_2.3_negativos <- NOI_res_D2_vs_D3_negativos_wilcox_pvalue$results %>%
-  filter(ontology != "cellular_component")
-
-#NOI_results_table_seleccionado <- NOI_results_table_2.3 %>% select(node_id, raw_p_high_rank)
-#write.csv(NOI_results_table_seleccionado, "NOI_results_table_2.3.csv", row.names = FALSE)
-
-#subset de los top 20 terminos
-NOI_top_terms_1.2_positivos <- NOI_results_table_1.2_positivos[1:20, ]
-NOI_top_terms_1.2_negativos <- NOI_results_table_1.2_negativos[1:20, ]
-
-NOI_top_terms_1.3_positivos <- NOI_results_table_1.3_positivos[1:20, ]
-NOI_top_terms_1.3_negativos <- NOI_results_table_1.3_negativos[1:20, ]
-
-NOI_top_terms_2.3_positivos <- NOI_results_table_2.3_positivos[1:20, ]
-NOI_top_terms_2.3_negativos <- NOI_results_table_2.3_negativos[1:20, ]
-
-
-#graficos
-custom_colors <- c(
-  "biological_process" = "salmon",
-  "molecular_function" = "snow3"       
-)
-
-#1.2
-ggplot(NOI_top_terms_1.2_positivos, aes(x = reorder(node_name, -FWER_high_rank), y = -log10(FWER_high_rank), fill = ontology)) +
-    geom_bar(stat = "identity") +
-    coord_flip() +
-    labs(title = "Top 20 Términos de enriquecimiento GO - positivos",
-         x = "Términos GO",
-         y = "-log10(FWER_high_rank)",
-         fill = "Ontology") +
-    theme_minimal() +
-    theme(axis.text.y = element_text(size = 8)) +  # Ajusta el tamaño del texto
-    facet_wrap(~ ontology, scales = "free_y", ncol = 1) + # Agrupa por ontología en diferentes paneles
-  scale_fill_manual(values = custom_colors)
-
-ggplot(NOI_top_terms_1.2_negativos, aes(x = reorder(node_name, -FWER_high_rank), y = -log10(FWER_high_rank), fill = ontology)) +
-    geom_bar(stat = "identity") +
-    coord_flip() +
-    labs(title = "Top 20 Términos de enriquecimiento GO - negativos",
-         x = "Términos GO",
-         y = "-log10(FWER_high_rank)",
-         fill = "Ontology") +
-    theme_minimal() +
-    theme(axis.text.y = element_text(size = 8)) +  # Ajusta el tamaño del texto
-    facet_wrap(~ ontology, scales = "free_y", ncol = 1) + # Agrupa por ontología en diferentes paneles
-  scale_fill_manual(values = custom_colors)
-
-#1.3
-ggplot(NOI_top_terms_1.3_positivos, aes(x = reorder(node_name, -FWER_high_rank), y = -log10(FWER_high_rank), fill = ontology)) +
-    geom_bar(stat = "identity") +
-    coord_flip() +
-    labs(title = "Top 20 Términos de enriquecimiento GO - positivos",
-         x = "Términos GO",
-         y = "-log10(FWER_high_rank)",
-         fill = "Ontology") +
-    theme_minimal() +
-    theme(axis.text.y = element_text(size = 8)) +  # Ajusta el tamaño del texto
-    facet_wrap(~ ontology, scales = "free_y", ncol = 1) + # Agrupa por ontología en diferentes paneles
-  scale_fill_manual(values = custom_colors)
-
-ggplot(NOI_top_terms_1.3_negativos, aes(x = reorder(node_name, -FWER_high_rank), y = -log10(FWER_high_rank), fill = ontology)) +
-    geom_bar(stat = "identity") +
-    coord_flip() +
-    labs(title = "Top 20 Términos de enriquecimiento GO - negativos",
-         x = "Términos GO",
-         y = "-log10(FWER_high_rank)",
-         fill = "Ontology") +
-    theme_minimal() +
-    theme(axis.text.y = element_text(size = 8)) +  # Ajusta el tamaño del texto
-    facet_wrap(~ ontology, scales = "free_y", ncol = 1) + # Agrupa por ontología en diferentes paneles
-  scale_fill_manual(values = custom_colors)
-
-#2.3
-ggplot(NOI_top_terms_2.3_positivos, aes(x = reorder(node_name, -FWER_high_rank), y = -log10(FWER_high_rank), fill = ontology)) +
-    geom_bar(stat = "identity") +
-    coord_flip() +
-    labs(title = "Top 20 Términos de enriquecimiento GO - positivos",
-         x = "Términos GO",
-         y = "-log10(FWER_high_rank)",
-         fill = "Ontology") +
-    theme_minimal() +
-    theme(axis.text.y = element_text(size = 8)) +  # Ajusta el tamaño del texto
-    facet_wrap(~ ontology, scales = "free_y", ncol = 1) + # Agrupa por ontología en diferentes paneles
-  scale_fill_manual(values = custom_colors)
-
-ggplot(NOI_top_terms_2.3_negativos, aes(x = reorder(node_name, -FWER_high_rank), y = -log10(FWER_high_rank), fill = ontology)) +
-    geom_bar(stat = "identity") +
-    coord_flip() +
-    labs(title = "Top 20 Términos de enriquecimiento GO - negativos",
-         x = "Términos GO",
-         y = "-log10(FWER_high_rank)",
-         fill = "Ontology") +
-    theme_minimal() +
-    theme(axis.text.y = element_text(size = 8)) +  # Ajusta el tamaño del texto
-    facet_wrap(~ ontology, scales = "free_y", ncol = 1) + # Agrupa por ontología en diferentes paneles
-  scale_fill_manual(values = custom_colors)
-```
-
-#GO de reviGO
-### estos los hago solo para procesos biologicos
-```{r cuadro dia 1 vs 2 - DIA 2}
-# A treemap R script produced by the Revigo server at http://revigo.irb.hr/
-# If you found Revigo useful in your work, please cite the following reference:
-# Supek F et al. "REVIGO summarizes and visualizes long lists of Gene Ontology
-# terms" PLoS ONE 2011. doi:10.1371/journal.pone.0021800
-
-# author: Anton Kratz <anton.kratz@gmail.com>, RIKEN Omics Science Center, Functional Genomics Technology Team, Japan
-# created: Fri, Nov 02, 2012  7:25:52 PM
-# last change: Fri, Nov 09, 2012  3:20:01 PM
-
-# -----------------------------------------------------------------------------
-# If you don't have the treemap package installed, uncomment the following line:
-# install.packages( "treemap" );
-# library(treemap) 								# treemap package by Martijn Tennekes
-
-# Set the working directory if necessary
-# setwd("C:/Users/username/workingdir");
-
-# --------------------------------------------------------------------------
-# Here is your data from Revigo. Scroll down for plot configuration options.
-
-revigo.names <- c("term_ID","description","frequency","value","uniqueness","dispensability","representative");
-revigo.data <- rbind(c("GO:0001889","liver development",0.0225238407876802,0.11,0.879791432278469,-0,"liver development"),
-c("GO:0001659","temperature homeostasis",0.00521560688767286,0.995,0.9292472700246948,0.35154571,"liver development"),
-c("GO:0001945","lymph vessel development",0.007573583007725055,0.998,0.8980953306200957,0.43083969,"liver development"),
-c("GO:0003017","lymph circulation",0.00018706282372021584,0.897,0.9337612509587212,0.29735104,"liver development"),
-c("GO:0007631","feeding behavior",0.021810048434010958,0.528,0.9232103001064085,0.38143249,"liver development"),
-c("GO:0031099","regeneration",0.028851979205899606,0.397,0.9427741485013986,0.39996379,"liver development"),
-c("GO:0031100","animal organ regeneration",0.0019173939431322126,0.281,0.9425276481125425,0.46898479,"liver development"),
-c("GO:0061008","hepaticobiliary system development",0.022952116199881745,0.11,0.8943033185540582,0.45931118,"liver development"),
-c("GO:0002252","immune effector process",0.11342160499804296,0.995,0.9294369821161143,-0,"immune effector process"),
-c("GO:0003341","cilium movement",0.13264477148823883,0.999,0.9890829932914927,0.01310775,"cilium movement"),
-c("GO:0006308","DNA catabolic process",0.09203983197623357,0.335,0.9359501501494895,0.02983421,"DNA catabolic process"),
-c("GO:0006396","RNA processing",4.402491558667012,0.852,0.9165521786127975,0.34439467,"DNA catabolic process"),
-c("GO:0016052","carbohydrate catabolic process",1.673968598354507,0.516,0.9173422870635511,0.39428763,"DNA catabolic process"),
-c("GO:0016567","protein ubiquitination",1.2480954666259985,0.99,0.9439930369157727,0.12875289,"DNA catabolic process"),
-c("GO:1901616","organic hydroxy compound catabolic process",0.27678898392938356,0.764,0.9244045723618944,0.43778859,"DNA catabolic process"),
-c("GO:0006338","chromatin remodeling",1.5008394936485032,0.602,0.9194480975073819,0.01664847,"chromatin remodeling"),
-c("GO:0006325","chromatin organization",1.6774440287109929,0.995,0.9221900932941798,0.47975937,"chromatin remodeling"),
-c("GO:0008154","actin polymerization or depolymerization",0.11001755387692379,0.961,0.9332628293803685,0.33320551,"chromatin remodeling"),
-c("GO:0009914","hormone transport",0.0404671037471588,0.999,0.8570693419860411,0.4992488,"chromatin remodeling"),
-c("GO:0032535","regulation of cellular component size",0.31115193237619854,0.886,0.8075406838912202,0.36794493,"chromatin remodeling"),
-c("GO:0043933","protein-containing complex organization",2.844366536607136,0.674,0.9176222166230925,0.47288067,"chromatin remodeling"),
-c("GO:0051258","protein polymerization",0.1736164525888535,0.961,0.9259728176320255,0.34760703,"chromatin remodeling"),
-c("GO:0006749","glutathione metabolic process",0.32127301568063965,0.008,0.9111083184717239,0.07971079,"glutathione metabolic process"),
-c("GO:0006979","response to oxidative stress",0.7667902052527142,0.248,0.9280969121454912,-0,"response to oxidative stress"),
-c("GO:0002526","acute inflammatory response",0.014610591073726333,0.335,0.9458557461868092,0.37064118,"response to oxidative stress"),
-c("GO:0006950","response to stress",6.596819705552286,0.886,0.9237254130961691,0.38857153,"response to oxidative stress"),
-c("GO:0007264","small GTPase-mediated signal transduction",0.3940010724607046,0.722,0.8385280460740125,0.28335768,"response to oxidative stress"),
-c("GO:0009409","response to cold",0.06007177994362616,0.996,0.9405987191802643,0.41328489,"response to oxidative stress"),
-c("GO:0010737","protein kinase A signaling",0.0188933451957418,0.982,0.8698368825819122,0.42376062,"response to oxidative stress"),
-c("GO:0034599","cellular response to oxidative stress",0.33220388410355384,0.289,0.8838626067503211,0.48010384,"response to oxidative stress"),
-c("GO:0048014","Tie signaling pathway",0.003428664650556062,0.897,0.8809699278758528,0.19463356,"response to oxidative stress"),
-c("GO:1901653","cellular response to peptide",0.00042827541220154676,0.998,0.9270469590283018,0.23287298,"response to oxidative stress"),
-c("GO:1904772","response to tetrachloromethane",0.00013783576484647483,0.886,0.9438800220646067,0.16057342,"response to oxidative stress"),
-c("GO:0008152","metabolic process",58.08643542977757,0.999,1,-0,"metabolic process"),
-c("GO:0009404","toxin metabolic process",0.09338865338937408,0.998,0.9485321551200108,0.08783967,"toxin metabolic process"),
-c("GO:0009987","cellular process",74.54733381080298,0.886,1,-0,"cellular process"),
-c("GO:0015721","bile acid and bile salt transport",0.014590900250176835,0.521,0.9649738838237273,-0,"bile acid and bile salt transport"),
-c("GO:0002790","peptide secretion",0.01872597319557108,0.823,0.949573722675073,0.19809831,"bile acid and bile salt transport"),
-c("GO:0016197","endosomal transport",0.5028864039835323,0.682,0.9440736473127014,0.194599,"bile acid and bile salt transport"),
-c("GO:0051674","localization of cell",0.000733483177218741,0.54,0.9734558977086784,0.12669711,"bile acid and bile salt transport"),
-c("GO:0016049","cell growth",0.04912368205010616,0.952,0.9898734570034445,0.01205779,"cell growth"),
-c("GO:0016477","cell migration",0.48278207313949656,0.974,0.9825238581325159,0.01478176,"cell migration"),
-c("GO:0031341","regulation of cell killing",0.026508771203509533,0.335,0.9283528593664594,-0,"regulation of cell killing"),
-c("GO:0002703","regulation of leukocyte mediated immunity",0.054452511173188625,0.753,0.8339462596486792,0.12301617,"regulation of cell killing"),
-c("GO:0010565","regulation of cellular ketone metabolic process",0.0735206124279322,0.999,0.8867651554061926,0.22122022,"regulation of cell killing"),
-c("GO:0019216","regulation of lipid metabolic process",0.10508254122483125,0.988,0.9155903823309166,0.19494331,"regulation of cell killing"),
-c("GO:0040008","regulation of growth",0.19187230737218033,0.988,0.9214315573461973,0.14069683,"regulation of cell killing"),
-c("GO:0043254","regulation of protein-containing complex assembly",0.27547216010451103,0.999,0.8954358251582082,0.17171204,"regulation of cell killing"),
-c("GO:0050994","regulation of lipid catabolic process",0.014081400190833615,0.547,0.8851552299253879,0.21131433,"regulation of cell killing"),
-c("GO:0080134","regulation of response to stress",0.45630529952425497,0.994,0.8735953398091932,0.1663796,"regulation of cell killing"),
-c("GO:0090087","regulation of peptide transport",0.03690552603764364,0.823,0.897574992191885,0.12565585,"regulation of cell killing"),
-c("GO:0120161","regulation of cold-induced thermogenesis",0.011029322540661673,0.944,0.9168161818517702,0.1116932,"regulation of cell killing"),
-c("GO:0040007","growth",0.11510024770563755,0.998,1,-0,"growth"),
-c("GO:0040011","locomotion",0.4992706765092561,0.138,1,-0,"locomotion"),
-c("GO:0046456","icosanoid biosynthetic process",0.02553161408486578,0.001,0.8711919968485573,0,"icosanoid biosynthetic process"),
-c("GO:0009064","glutamine family amino acid metabolic process",1.1274251772087973,0.747,0.8729384203935865,0.36209777,"icosanoid biosynthetic process"),
-c("GO:0019184","nonribosomal peptide biosynthetic process",0.19816598684918815,0.064,0.9470920211019137,0.12378235,"icosanoid biosynthetic process"),
-c("GO:0072329","monocarboxylic acid catabolic process",0.7868330022731579,0.999,0.8468273104195249,0.49514041,"icosanoid biosynthetic process"),
-c("GO:0048609","multicellular organismal reproductive process",0.2748518991627019,0.988,0.9740255932166316,-0,"multicellular organismal reproductive process"),
-c("GO:0048870","cell motility",0.8376747086779577,0.54,0.9872217365986908,0.01145337,"cell motility"),
-c("GO:0051179","localization",19.630402257434774,0.079,1,-0,"localization"),
-c("GO:0071840","cellular component organization or biogenesis",14.26840886478907,0.531,0.9826120205583112,0.02432814,"cellular component organization or biogenesis"),
-c("GO:0072593","reactive oxygen species metabolic process",0.33140640574979924,0.952,0.9545846617572166,0.09755613,"reactive oxygen species metabolic process"),
-c("GO:0006575","cellular modified amino acid metabolic process",1.0867980855202988,0.963,0.9496896440633011,0.10917627,"reactive oxygen species metabolic process"),
-c("GO:1901376","organic heteropentacyclic compound metabolic process",0.0032317564150610976,0.886,0.9850357784954046,0.02446586,"organic heteropentacyclic compound metabolic process"),
-c("GO:1901568","fatty acid derivative metabolic process",0.34596038570582077,0.565,0.9258198615154619,0.05837723,"fatty acid derivative metabolic process"),
-c("GO:0030258","lipid modification",0.6585497482011325,0.886,0.8989082244338146,0.49549591,"fatty acid derivative metabolic process"),
-c("GO:1901570","fatty acid derivative biosynthetic process",0.1773601704162015,0.565,0.9131098711633766,0.44133364,"fatty acid derivative metabolic process"),
-c("GO:1990845","adaptive thermogenesis",0.005013775946290522,0.885,0.9846351473243062,0.02505707,"adaptive thermogenesis"));
-
-stuff <- data.frame(revigo.data);
-names(stuff) <- revigo.names;
-
-stuff$value <- as.numeric( as.character(stuff$value) );
-stuff$frequency <- as.numeric( as.character(stuff$frequency) );
-stuff$uniqueness <- as.numeric( as.character(stuff$uniqueness) );
-stuff$dispensability <- as.numeric( as.character(stuff$dispensability) );
-
-# by default, outputs to a PDF file
-pdf( file="revigo_treemap.pdf", width=16, height=9 ) # width and height are in inches
-
-# check the tmPlot command documentation for all possible parameters - there are a lot more
-treemap(
-  stuff,
-  index = c("representative","description"),
-  vSize = "value",
-  type = "categorical",
-  vColor = "representative",
-  title = "Revigo TreeMap",
-  inflate.labels = FALSE,      # set this to TRUE for space-filling group labels - good for posters
-  lowerbound.cex.labels = 0,   # try to draw as many labels as possible (still, some small squares may not get a label)
-  bg.labels = "#CCCCCC00",   # define background color of group labels
-								 # "#CCCCCC00" is fully transparent, "#CCCCCCAA" is semi-transparent grey, NA is opaque
-  position.legend = "none"
-)
-
-dev.off()
-```
-
-```{r cuadro dia 1 vs dia 2 - DIA 1}
-# Here is your data from Revigo. Scroll down for plot configuration options.
-
-revigo.names <- c("term_ID","description","frequency","value","uniqueness","dispensability","representative");
-revigo.data <- rbind(c("GO:0008202","steroid metabolic process",0.41840538689736173,0.302,0.9609630379898276,-0,"steroid metabolic process"),
-c("GO:0006694","steroid biosynthetic process",0.22341700669847356,0.139,0.9452348146586125,0.45737756,"steroid metabolic process"),
-c("GO:0016192","vesicle-mediated transport",2.591260690701909,0.045,0.9767394904430916,0.0220544,"vesicle-mediated transport"),
-c("GO:0008104","protein localization",3.933557057188699,0.98,0.9705693470817875,0.37989725,"vesicle-mediated transport"),
-c("GO:0033036","macromolecule localization",5.142002589244843,0.999,0.9858593890015506,0.42186534,"vesicle-mediated transport"),
-c("GO:0051674","localization of cell",0.000733483177218741,0.797,0.9870719264102499,0.16910032,"vesicle-mediated transport"),
-c("GO:0070198","protein localization to chromosome, telomeric region",0.004511659945778364,0.998,0.981419212991078,0.46912339,"vesicle-mediated transport"),
-c("GO:0016477","cell migration",0.48278207313949656,0.948,0.9600153843385426,0.01767407,"cell migration"),
-c("GO:0016579","protein deubiquitination",0.32662399698021527,0.355,0.9497971747898962,0.06596959,"protein deubiquitination"),
-c("GO:0000398","mRNA splicing, via spliceosome",0.7799805956779332,0.996,0.9067983587954352,0.45684679,"protein deubiquitination"),
-c("GO:0000723","telomere maintenance",0.1825413183626627,0.488,0.897105729563128,0.12173403,"protein deubiquitination"),
-c("GO:0006304","DNA modification",0.17700081288642316,0.978,0.9297196454311366,0.43128959,"protein deubiquitination"),
-c("GO:0006353","DNA-templated transcription termination",0.1805525451841636,0.947,0.9230779524357936,0.27593649,"protein deubiquitination"),
-c("GO:0009187","cyclic nucleotide metabolic process",0.160918332752372,0.525,0.9109507098833359,0.21695138,"protein deubiquitination"),
-c("GO:0030865","cortical cytoskeleton organization",0.11460797711690014,0.979,0.9494693067680515,0.38944053,"protein deubiquitination"),
-c("GO:0034655","nucleobase-containing compound catabolic process",1.531837772621298,0.979,0.9248105581116682,0.26357786,"protein deubiquitination"),
-c("GO:0035510","DNA dealkylation",0.026230638320872898,0.978,0.9387001194607761,0.37470408,"protein deubiquitination"),
-c("GO:0044283","small molecule biosynthetic process",6.191735160786158,0.446,0.9408568903208395,0.35345722,"protein deubiquitination"),
-c("GO:0046434","organophosphate catabolic process",0.8689954248863754,0.999,0.9252144998010707,0.48955984,"protein deubiquitination"),
-c("GO:0070213","protein auto-ADP-ribosylation",0.0011346837070397304,0.998,0.9660192236462,0.4553629,"protein deubiquitination"),
-c("GO:0072523","purine-containing compound catabolic process",0.6943599721788354,0.999,0.9513907746752664,0.47755462,"protein deubiquitination"),
-c("GO:0035556","intracellular signal transduction",4.385343312708344,0.023,0.7339336035042667,0,"intracellular signal transduction"),
-c("GO:0000165","MAPK cascade",0.14136534496772205,0.042,0.7908362689829977,0.45619705,"intracellular signal transduction"),
-c("GO:0009416","response to light stimulus",0.2541100779062511,0.854,0.9324473176889727,0.32399081,"intracellular signal transduction"),
-c("GO:0016525","negative regulation of angiogenesis",0.02570390879092387,0.969,0.7924014314089441,0.39449601,"intracellular signal transduction"),
-c("GO:0019222","regulation of metabolic process",15.757534779778567,0.97,0.7724574695125302,0.39008032,"intracellular signal transduction"),
-c("GO:0032204","regulation of telomere maintenance",0.030747220972538635,0.488,0.8128419590293473,0.18689935,"intracellular signal transduction"),
-c("GO:0032386","regulation of intracellular transport",0.08122710849461635,0.826,0.8454242436505897,0.20462567,"intracellular signal transduction"),
-c("GO:0032879","regulation of localization",0.9058074195121588,0.924,0.8288157046449557,0.24743112,"intracellular signal transduction"),
-c("GO:0042445","hormone metabolic process",0.19318666984410923,0.115,0.8172434385998774,0.19575486,"intracellular signal transduction"),
-c("GO:0048008","platelet-derived growth factor receptor signaling pathway",0.012683351718819371,0.603,0.8216239393457827,0.36529132,"intracellular signal transduction"),
-c("GO:0048518","positive regulation of biological process",4.418295905918426,0.554,0.801579028079471,0.31020407,"intracellular signal transduction"),
-c("GO:0048522","positive regulation of cellular process",3.6764170538087693,0.208,0.7089044579061939,0.32594882,"intracellular signal transduction"),
-c("GO:0050678","regulation of epithelial cell proliferation",0.059951173649385486,0.907,0.8214022775997184,0.19873274,"intracellular signal transduction"),
-c("GO:0050790","regulation of catalytic activity",1.150739112291401,0.625,0.7781182716149468,0.24176913,"intracellular signal transduction"),
-c("GO:0051174","regulation of phosphorus metabolic process",0.664319159501135,0.881,0.7977627590674862,0.25744722,"intracellular signal transduction"),
-c("GO:0065009","regulation of molecular function",1.4522794614225014,0.323,0.8294414589378344,0.24941519,"intracellular signal transduction"),
-c("GO:0071248","cellular response to metal ion",0.09907437868929116,0.954,0.9386762030001131,0.33975442,"intracellular signal transduction"),
-c("GO:0071364","cellular response to epidermal growth factor stimulus",0.007573583007725055,0.527,0.9502032583595101,0.23376505,"intracellular signal transduction"),
-c("GO:1902531","regulation of intracellular signal transduction",0.9735955409342439,0.027,0.7203699698008506,0.27013017,"intracellular signal transduction"),
-c("GO:1902749","regulation of cell cycle G2/M phase transition",0.1344390977841867,0.979,0.8282432156915993,0.21521261,"intracellular signal transduction"),
-c("GO:2000146","negative regulation of cell motility",0.14326550944024846,0.047,0.749719450124536,0.21662706,"intracellular signal transduction"),
-c("GO:0043473","pigmentation",0.043122903573397126,0.837,1,-0,"pigmentation"),
-c("GO:0044281","small molecule metabolic process",14.792283225323425,0.972,0.9773613270447505,0.06164175,"small molecule metabolic process"),
-c("GO:0006793","phosphorus metabolic process",12.714975181439863,0.996,0.9549189882924326,0.11460578,"small molecule metabolic process"),
-c("GO:0044772","mitotic cell cycle phase transition",0.15111722533061017,0.59,0.9056669883828483,0.01554051,"mitotic cell cycle phase transition"),
-c("GO:0048144","fibroblast proliferation",0.003384360297569695,0.969,0.9814221734275222,0.01114157,"fibroblast proliferation"),
-c("GO:0048745","smooth muscle tissue development",0.0024121258848133096,0.98,0.9536135861427021,-0,"smooth muscle tissue development"),
-c("GO:0048870","cell motility",0.8376747086779577,0.797,0.9906707192509565,0.01890549,"cell motility"),
-c("GO:0060249","anatomical structure homeostasis",0.043615174162134535,0.046,0.9546871572345866,-0,"anatomical structure homeostasis"),
-c("GO:0008406","gonad development",0.03554193650684101,0.969,0.9346734684207161,0.42914511,"anatomical structure homeostasis"),
-c("GO:0061318","renal filtration cell differentiation",0.004472278298679371,0.88,0.9164340719026116,0.36158706,"anatomical structure homeostasis"));
-
-stuff <- data.frame(revigo.data);
-names(stuff) <- revigo.names;
-
-stuff$value <- as.numeric( as.character(stuff$value) );
-stuff$frequency <- as.numeric( as.character(stuff$frequency) );
-stuff$uniqueness <- as.numeric( as.character(stuff$uniqueness) );
-stuff$dispensability <- as.numeric( as.character(stuff$dispensability) );
-
-# by default, outputs to a PDF file
-pdf( file="revigo_treemap.pdf", width=16, height=9 ) # width and height are in inches
-
-# check the tmPlot command documentation for all possible parameters - there are a lot more
-treemap(
-  stuff,
-  index = c("representative","description"),
-  vSize = "value",
-  type = "categorical",
-  vColor = "representative",
-  title = "Revigo TreeMap",
-  inflate.labels = FALSE,      # set this to TRUE for space-filling group labels - good for posters
-  lowerbound.cex.labels = 0,   # try to draw as many labels as possible (still, some small squares may not get a label)
-  bg.labels = "#CCCCCC00",   # define background color of group labels
-								 # "#CCCCCC00" is fully transparent, "#CCCCCCAA" is semi-transparent grey, NA is opaque
-  position.legend = "none"
-)
-
-dev.off()
-```
-
-```{r cuadro dia 1 vs dia 3 - DIA 3}
-# Here is your data from Revigo. Scroll down for plot configuration options.
-
-revigo.names <- c("term_ID","description","frequency","value","uniqueness","dispensability","representative");
-revigo.data <- rbind(c("GO:0001692","histamine metabolic process",0.0039677009452235255,0.996,0.9854241040701324,0.03136601,"histamine metabolic process"),
-c("GO:0007030","Golgi organization",0.20421106967888353,0.099,0.9002693837795952,-0,"Golgi organization"),
-c("GO:0008154","actin polymerization or depolymerization",0.11001755387692379,0.357,0.8958349856803106,0.39157546,"Golgi organization"),
-c("GO:0022411","cellular component disassembly",0.49554664950545757,0.914,0.9055225245146762,0.4137849,"Golgi organization"),
-c("GO:0043933","protein-containing complex organization",2.844366536607136,0.741,0.8888659009593253,0.37617588,"Golgi organization"),
-c("GO:0045792","negative regulation of cell size",0.0011051474717154858,0.997,0.853462650550112,0.20839031,"Golgi organization"),
-c("GO:0048284","organelle fusion",0.2981486047746998,0.985,0.8972037229427992,0.42408263,"Golgi organization"),
-c("GO:0051258","protein polymerization",0.1736164525888535,0.469,0.8979655456854269,0.29235967,"Golgi organization"),
-c("GO:0016567","protein ubiquitination",1.2480954666259985,0.003,0.9322124331291365,-0,"protein ubiquitination"),
-c("GO:0051189","prosthetic group metabolic process",0.18812120548600128,0.997,0.9585797154640211,0.25341737,"protein ubiquitination"),
-c("GO:0019058","viral life cycle",0.08843148856078835,0.999,0.9927493182828258,-0,"viral life cycle"),
-c("GO:0019184","nonribosomal peptide biosynthetic process",0.19816598684918815,0.58,0.9521092838729668,0.0429306,"nonribosomal peptide biosynthetic process"),
-c("GO:0042438","melanin biosynthetic process",0.014997023485885198,0.996,0.9621446504025524,0.1194001,"nonribosomal peptide biosynthetic process"),
-c("GO:0019953","sexual reproduction",0.6993688254192385,0.597,0.9510897649942307,-0,"sexual reproduction"),
-c("GO:0008315","G2/MI transition of meiotic cell cycle",0.00013291305895910072,0.836,0.9362276967021856,0.48846027,"sexual reproduction"),
-c("GO:0022414","reproductive process",1.0417430198861073,0.559,1,-0,"reproductive process"),
-c("GO:0031349","positive regulation of defense response",0.11355205670405838,0.003,0.8512503061241733,0,"positive regulation of defense response"),
-c("GO:0007213","G protein-coupled acetylcholine receptor signaling pathway",0.01540560807453725,0.962,0.8729790331840065,0.40304622,"positive regulation of defense response"),
-c("GO:0010564","regulation of cell cycle process",0.6468238627774074,0.235,0.8120392840782691,0.21389944,"positive regulation of defense response"),
-c("GO:0031048","regulatory ncRNA-mediated heterochromatin formation",0.037543016450058586,0.517,0.8170197862545,0.3496366,"positive regulation of defense response"),
-c("GO:0032386","regulation of intracellular transport",0.08122710849461635,0.538,0.871928810547822,0.17652122,"positive regulation of defense response"),
-c("GO:0032677","regulation of interleukin-8 production",0.009426981774321403,0.985,0.9114724629014924,0.22001728,"positive regulation of defense response"),
-c("GO:0033043","regulation of organelle organization",0.8585740565228043,0.165,0.7960125672816286,0.16793033,"positive regulation of defense response"),
-c("GO:0043455","regulation of secondary metabolic process",0.06926985589418466,0.996,0.9060271620598279,0.23062726,"positive regulation of defense response"),
-c("GO:0043484","regulation of RNA splicing",0.19801584431962324,0.454,0.8929417513763311,0.19084415,"positive regulation of defense response"),
-c("GO:0045087","innate immune response",0.24410221683721955,0.982,0.9735570787326,0.2101401,"positive regulation of defense response"),
-c("GO:0048070","regulation of developmental pigmentation",0.001887857707807968,0.996,0.9138909022538714,0.10973028,"positive regulation of defense response"),
-c("GO:0048525","negative regulation of viral process",0.014659818132600075,0.014,0.8740430460293651,0.12413979,"positive regulation of defense response"),
-c("GO:0050792","regulation of viral process",0.02571867690858599,0.253,0.9155665587859559,0.12877745,"positive regulation of defense response"),
-c("GO:0050848","regulation of calcium-mediated signaling",0.013291305895910072,0.885,0.8879026699613484,0.47061355,"positive regulation of defense response"),
-c("GO:0050849","negative regulation of calcium-mediated signaling",0.0033203651210338314,0.997,0.8718702913212922,0.47683485,"positive regulation of defense response"),
-c("GO:0051726","regulation of cell cycle",0.9785034787039558,0.812,0.8851544988454763,0.22333449,"positive regulation of defense response"),
-c("GO:0071214","cellular response to abiotic stimulus",0.15989933263368555,0.999,0.9694122656585072,0.23679543,"positive regulation of defense response"),
-c("GO:0097193","intrinsic apoptotic signaling pathway",0.06351275135890067,0.999,0.876137637605968,0.28738126,"positive regulation of defense response"),
-c("GO:0099105","ion channel modulating, G protein-coupled receptor signaling pathway",0.0006965628830634353,0.962,0.9028064723155694,0.22218592,"positive regulation of defense response"),
-c("GO:0104004","cellular response to environmental stimulus",0.15989933263368555,0.999,0.9694122656585072,0.26501062,"positive regulation of defense response"),
-c("GO:0120305","regulation of pigmentation",0.0021635292375009173,0.996,0.9266328824456428,0.11058384,"positive regulation of defense response"),
-c("GO:1900376","regulation of secondary metabolite biosynthetic process",0.062075321239787415,0.996,0.8911875308419895,0.24767056,"positive regulation of defense response"),
-c("GO:1990806","ligand-gated ion channel signaling pathway",0.03294520915125117,0.962,0.8854374551050269,0.13093229,"positive regulation of defense response"),
-c("GO:2000241","regulation of reproductive process",0.14026758155483765,0.985,0.9058243717365376,0.17106285,"positive regulation of defense response"),
-c("GO:0032469","endoplasmic reticulum calcium ion homeostasis",0.0175248329590518,0.962,1,-0,"endoplasmic reticulum calcium ion homeostasis"),
-c("GO:0034032","purine nucleoside bisphosphate metabolic process",0.05868603823633035,0.099,0.8419169828451397,0.06248995,"purine nucleoside bisphosphate metabolic process"),
-c("GO:0006396","RNA processing",4.402491558667012,0.142,0.8806680628218979,0.26160491,"purine nucleoside bisphosphate metabolic process"),
-c("GO:0006570","tyrosine metabolic process",0.10846936287534463,0.751,0.8917186921584543,0.48024325,"purine nucleoside bisphosphate metabolic process"),
-c("GO:0009072","aromatic amino acid metabolic process",1.0240458922209974,0.996,0.8772347597062474,0.38926363,"purine nucleoside bisphosphate metabolic process"),
-c("GO:0019482","beta-alanine metabolic process",0.012737501483580486,0.999,0.9038885364081736,0.40432755,"purine nucleoside bisphosphate metabolic process"),
-c("GO:0033865","nucleoside bisphosphate metabolic process",0.05868603823633035,0.099,0.8732059068604655,0.39778344,"purine nucleoside bisphosphate metabolic process"),
-c("GO:0042126","nitrate metabolic process",0.07775660084401761,0.175,0.9066514539130216,0.2961472,"purine nucleoside bisphosphate metabolic process"),
-c("GO:0043545","molybdopterin cofactor metabolic process",0.1844513282469639,0.997,0.8860473327212401,0.36542223,"purine nucleoside bisphosphate metabolic process"),
-c("GO:0046456","icosanoid biosynthetic process",0.02553161408486578,0.119,0.8842312915555282,0.20725497,"purine nucleoside bisphosphate metabolic process"),
-c("GO:0042335","cuticle development",0.0034680462976550545,0.723,0.9645537166862272,-0,"cuticle development"),
-c("GO:0007488","histoblast morphogenesis",0.00019690823549496406,0.836,0.9685774485187653,0.31912272,"cuticle development"),
-c("GO:0007591","molting cycle, chitin-based cuticle",0.0017746354723983636,0.996,0.9635552890190625,0.30266364,"cuticle development"),
-c("GO:0009791","post-embryonic development",0.16394333552016338,0.865,0.9574712445067874,0.44775586,"cuticle development"),
-c("GO:0022402","cell cycle process",1.8491578554743764,0.999,0.9349183567686649,0.46047681,"cuticle development"),
-c("GO:0032637","interleukin-8 production",0.00011371450599834171,0.985,0.9298070726861876,0.26794977,"cuticle development"),
-c("GO:0045448","mitotic cell cycle, embryonic",0.00035689617683462235,0.836,0.9291501991368749,0.32744202,"cuticle development"),
-c("GO:0045475","locomotor rhythm",0.002050307002091313,0.996,0.9705300759528195,0.30473838,"cuticle development"),
-c("GO:0048067","cuticle pigmentation",0.00019444688255127702,0.996,0.9645824399333719,0.31895132,"cuticle development"),
-c("GO:0050879","multicellular organismal movement",0.02026924149126286,0.999,0.9674277628187384,0.37594773,"cuticle development"),
-c("GO:0050881","musculoskeletal movement",0.01895980172522135,0.999,0.9632987650489834,0.34071722,"cuticle development"),
-c("GO:0043252","sodium-independent organic anion transport",0.022760130670274156,0.545,0.9513369578661242,-0,"sodium-independent organic anion transport"),
-c("GO:0006403","RNA localization",0.3489607749441753,0.975,0.9385058241727116,0.21660243,"sodium-independent organic anion transport"),
-c("GO:0006836","neurotransmitter transport",0.14346487902868713,0.949,0.9480433499298636,0.21191629,"sodium-independent organic anion transport"),
-c("GO:0006837","serotonin transport",0.010460750010669964,0.934,0.9412646006077408,0.31598093,"sodium-independent organic anion transport"),
-c("GO:0015844","monoamine transport",0.01932162060794335,0.934,0.94429355678373,0.16226626,"sodium-independent organic anion transport"),
-c("GO:0015931","nucleobase-containing compound transport",0.5733623228201237,0.999,0.9291672650854877,0.40823952,"sodium-independent organic anion transport"),
-c("GO:0036444","calcium import into the mitochondrion",0.022543531611229697,0.571,0.9351985099720856,0.16375715,"sodium-independent organic anion transport"),
-c("GO:0045022","early endosome to late endosome transport",0.017546985135544983,0.975,0.9171475908021629,0.47218148,"sodium-independent organic anion transport"),
-c("GO:0051641","cellular localization",5.613085851842994,0.995,0.9189061005843544,0.30650843,"sodium-independent organic anion transport"),
-c("GO:0097120","receptor localization to synapse",0.05208222828841799,0.99,0.9536530051843239,0.18713985,"sodium-independent organic anion transport"),
-c("GO:0098810","neurotransmitter reuptake",0.013699890484562124,0.999,0.9246361482554505,0.42378376,"sodium-independent organic anion transport"),
-c("GO:0099504","synaptic vesicle cycle",0.16221792710663874,0.675,0.9005896673710444,0.18557566,"sodium-independent organic anion transport"),
-c("GO:0110010","basolateral protein secretion",8.122464714167267E-05,0.999,0.9329794710203287,0.28606938,"sodium-independent organic anion transport"),
-c("GO:0044273","sulfur compound catabolic process",0.14801838197450817,0.234,0.9101498359036502,0.08003823,"sulfur compound catabolic process"),
-c("GO:0052803","imidazole-containing compound metabolic process",0.33480553416503106,0.996,0.9803270386932327,0.04516356,"imidazole-containing compound metabolic process"),
-c("GO:0070647","protein modification by small protein conjugation or removal",1.8001720091891167,0,0.9309694640190765,0,"protein modification by small protein conjugation or removal"),
-c("GO:1901568","fatty acid derivative metabolic process",0.34596038570582077,0.993,0.9129182813495391,0.07352111,"fatty acid derivative metabolic process"),
-c("GO:0051791","medium-chain fatty acid metabolic process",0.014083861543777304,0.999,0.8761913664582331,0.40021937,"fatty acid derivative metabolic process"),
-c("GO:0051792","medium-chain fatty acid biosynthetic process",0.009628812715703742,0.999,0.8687961799041333,0.47030885,"fatty acid derivative metabolic process"),
-c("GO:1900535","palmitic acid biosynthetic process",0.0017795581782857374,0.999,0.8773919435776494,0.31901135,"fatty acid derivative metabolic process"),
-c("GO:1901569","fatty acid derivative catabolic process",0.010896409481702573,0.999,0.9093729746537046,0.35809367,"fatty acid derivative metabolic process"));
-
-stuff <- data.frame(revigo.data);
-names(stuff) <- revigo.names;
-
-stuff$value <- as.numeric( as.character(stuff$value) );
-stuff$frequency <- as.numeric( as.character(stuff$frequency) );
-stuff$uniqueness <- as.numeric( as.character(stuff$uniqueness) );
-stuff$dispensability <- as.numeric( as.character(stuff$dispensability) );
-
-# by default, outputs to a PDF file
-pdf( file="revigo_treemap.pdf", width=16, height=9 ) # width and height are in inches
-
-# check the tmPlot command documentation for all possible parameters - there are a lot more
-treemap(
-  stuff,
-  index = c("representative","description"),
-  vSize = "value",
-  type = "categorical",
-  vColor = "representative",
-  title = "Revigo TreeMap",
-  inflate.labels = FALSE,      # set this to TRUE for space-filling group labels - good for posters
-  lowerbound.cex.labels = 0,   # try to draw as many labels as possible (still, some small squares may not get a label)
-  bg.labels = "#CCCCCCAA",   # define background color of group labels
-								 # "#CCCCCC00" is fully transparent, "#CCCCCCAA" is semi-transparent grey, NA is opaque
-  position.legend = "none"
-)
-
-dev.off()
-```
-
-```{r cuadro dia 1 vs dia 3 - DIA 1}
-# Here is your data from Revigo. Scroll down for plot configuration options.
-
-revigo.names <- c("term_ID","description","frequency","value","uniqueness","dispensability","representative");
-revigo.data <- rbind(c("GO:0006089","lactate metabolic process",0.1233580868317076,0.965,0.9691442991471162,0.03473893,"lactate metabolic process"),
-c("GO:0006790","sulfur compound metabolic process",2.3822573668416673,0.969,0.9617459699776824,0.10704775,"lactate metabolic process"),
-c("GO:0016236","macroautophagy",0.30253473572035017,0.984,0.9671326670592663,0.11711638,"lactate metabolic process"),
-c("GO:0009987","cellular process",74.54733381080298,0.984,1,-0,"cellular process"),
-c("GO:0032509","endosome transport via multivesicular body sorting pathway",0.14284461808687798,0.997,0.9668331074046933,0.01135837,"endosome transport via multivesicular body sorting pathway"),
-c("GO:0071985","multivesicular body sorting pathway",0.14978809474101915,0.997,0.9668126122790041,0.54513997,"endosome transport via multivesicular body sorting pathway"),
-c("GO:0045123","cellular extravasation",0.009198075950558507,0.854,0.9557907306532704,0.00939993,"cellular extravasation"),
-c("GO:0045446","endothelial cell differentiation",0.016732277311184568,0.992,0.9009218661466097,0.00976733,"endothelial cell differentiation"),
-c("GO:0045814","negative regulation of gene expression, epigenetic",0.1342348054898607,0.075,0.8611220762297541,0,"negative regulation of gene expression, epigenetic"),
-c("GO:0002685","regulation of leukocyte migration",0.04684939193013932,0.988,0.8157810631952828,0.14677829,"negative regulation of gene expression, epigenetic"),
-c("GO:0002691","regulation of cellular extravasation",0.00851874253810088,0.854,0.8137166862581217,0.69074258,"negative regulation of gene expression, epigenetic"),
-c("GO:0032098","regulation of appetite",0.007037008066001277,0.965,0.8868471402078166,0.11347278,"negative regulation of gene expression, epigenetic"),
-c("GO:0032100","positive regulation of appetite",0.0002830555885240108,0.965,0.7611997684247096,0.61680778,"negative regulation of gene expression, epigenetic"),
-c("GO:0032107","regulation of response to nutrient levels",0.0746060690760982,0.965,0.8173201648949989,0.49468934,"negative regulation of gene expression, epigenetic"),
-c("GO:0032109","positive regulation of response to nutrient levels",0.0026041114144208996,0.965,0.7708554141311567,0.51595154,"negative regulation of gene expression, epigenetic"),
-c("GO:0034333","adherens junction assembly",0.003940626062842968,0.997,0.984090400814881,0.21898459,"negative regulation of gene expression, epigenetic"),
-c("GO:0050790","regulation of catalytic activity",1.150739112291401,0.989,0.7379693860347815,0.16568102,"negative regulation of gene expression, epigenetic"),
-c("GO:0051438","regulation of ubiquitin-protein transferase activity",0.025999271144166315,0.625,0.7748933259148171,0.65577021,"negative regulation of gene expression, epigenetic"),
-c("GO:0051443","positive regulation of ubiquitin-protein transferase activity",0.02328193749433581,0.625,0.7129136699428333,0.6501279,"negative regulation of gene expression, epigenetic"),
-c("GO:1904994","regulation of leukocyte adhesion to vascular endothelial cell",0.0023185944729532016,0.854,0.8269923359719876,0.12125301,"negative regulation of gene expression, epigenetic"),
-c("GO:1904996","positive regulation of leukocyte adhesion to vascular endothelial cell",0.0016811040605382557,0.854,0.7589492880326877,0.66511053,"negative regulation of gene expression, epigenetic"),
-c("GO:2001235","positive regulation of apoptotic signaling pathway",0.04344780216196382,0.689,0.7742990117875406,0.14600755,"negative regulation of gene expression, epigenetic"),
-c("GO:1901071","glucosamine-containing compound metabolic process",0.16436668822647757,0.377,0.8552211745175476,-0,"glucosamine-containing compound metabolic process"),
-c("GO:0006022","aminoglycan metabolic process",1.0723474823879122,0.854,0.8594283421278942,0.55367231,"glucosamine-containing compound metabolic process"),
-c("GO:0006040","amino sugar metabolic process",0.3589095635425583,0.996,0.869614285713271,0.49455114,"glucosamine-containing compound metabolic process"),
-c("GO:0030203","glycosaminoglycan metabolic process",0.9847750060044705,0.854,0.8329104069251324,0.45953907,"glucosamine-containing compound metabolic process"),
-c("GO:0042339","keratan sulfate metabolic process",0.004442742063355126,0.854,0.8672960231591423,0.61284453,"glucosamine-containing compound metabolic process"),
-c("GO:1901615","organic hydroxy compound metabolic process",1.6412842926152864,0.731,0.9774513052843263,0.04328503,"organic hydroxy compound metabolic process"));
-
-stuff <- data.frame(revigo.data);
-names(stuff) <- revigo.names;
-
-stuff$value <- as.numeric( as.character(stuff$value) );
-stuff$frequency <- as.numeric( as.character(stuff$frequency) );
-stuff$uniqueness <- as.numeric( as.character(stuff$uniqueness) );
-stuff$dispensability <- as.numeric( as.character(stuff$dispensability) );
-
-# by default, outputs to a PDF file
-pdf( file="revigo_treemap.pdf", width=16, height=9 ) # width and height are in inches
-
-# check the tmPlot command documentation for all possible parameters - there are a lot more
-treemap(
-  stuff,
-  index = c("representative","description"),
-  vSize = "value",
-  type = "categorical",
-  vColor = "representative",
-  title = "Revigo TreeMap",
-  inflate.labels = FALSE,      # set this to TRUE for space-filling group labels - good for posters
-  lowerbound.cex.labels = 0,   # try to draw as many labels as possible (still, some small squares may not get a label)
-  bg.labels = "#CCCCCCAA",   # define background color of group labels
-								 # "#CCCCCC00" is fully transparent, "#CCCCCCAA" is semi-transparent grey, NA is opaque
-  position.legend = "none"
-)
-
-dev.off()
-```
-
-```{r cuadro dia 2 vs dia 3 - DIA 3}
-# Here is your data from Revigo. Scroll down for plot configuration options.
-
-revigo.names <- c("term_ID","description","frequency","value","uniqueness","dispensability","representative");
-revigo.data <- rbind(c("GO:0006261","DNA-templated DNA replication",0.8777086143070274,0.23,0.8760641294090159,0.05374663,"DNA-templated DNA replication"),
-c("GO:0006259","DNA metabolic process",5.572970721566783,0.999,0.8849289311618133,0.45692942,"DNA-templated DNA replication"),
-c("GO:0043412","macromolecule modification",10.203408176348653,0.784,0.9361180219927487,0.2086714,"DNA-templated DNA replication"),
-c("GO:0006790","sulfur compound metabolic process",2.3822573668416673,0.144,0.9374730180089181,0.03950128,"sulfur compound metabolic process"),
-c("GO:0002440","production of molecular mediator of immune response",0.014325074132258633,0.999,0.9215266162915683,0.16977302,"sulfur compound metabolic process"),
-c("GO:0006577","amino-acid betaine metabolic process",0.06114985253296109,0.864,0.9519133310287723,0.1003023,"sulfur compound metabolic process"),
-c("GO:0006579","amino-acid betaine catabolic process",0.0002732101767492626,0.864,0.961815805735217,0.44263056,"sulfur compound metabolic process"),
-c("GO:0006793","phosphorus metabolic process",12.714975181439863,0.999,0.9234004128060282,0.19260908,"sulfur compound metabolic process"),
-c("GO:0009067","aspartate family amino acid biosynthetic process",0.7209376612647682,0.503,0.8707148888338706,0.24233276,"sulfur compound metabolic process"),
-c("GO:0018108","peptidyl-tyrosine phosphorylation",0.02165744455150236,0.86,0.8909029575295649,0.44726651,"sulfur compound metabolic process"),
-c("GO:0018193","peptidyl-amino acid modification",2.338036699855386,0.695,0.917790656515575,0.27356857,"sulfur compound metabolic process"),
-c("GO:0018212","peptidyl-tyrosine modification",0.03475922627074853,0.86,0.940375111293792,0.39007714,"sulfur compound metabolic process"),
-c("GO:0030258","lipid modification",0.6585497482011325,0.885,0.9132775637050015,0.12751571,"sulfur compound metabolic process"),
-c("GO:0033865","nucleoside bisphosphate metabolic process",0.05868603823633035,0.599,0.8622149849144891,0.39778344,"sulfur compound metabolic process"),
-c("GO:0034032","purine nucleoside bisphosphate metabolic process",0.05868603823633035,0.599,0.8375285097042331,0.26321212,"sulfur compound metabolic process"),
-c("GO:0042157","lipoprotein metabolic process",0.22020740245990567,0.172,0.9437476818180611,0.21611168,"sulfur compound metabolic process"),
-c("GO:0042158","lipoprotein biosynthetic process",0.16932877576095065,0.172,0.9125797516526685,0.20926658,"sulfur compound metabolic process"),
-c("GO:0043094","cellular metabolic compound salvage",0.3608564937210148,0.864,0.9481319177406651,0.11932175,"sulfur compound metabolic process"),
-c("GO:0044272","sulfur compound biosynthetic process",1.4463771370635399,0.144,0.8875048818716498,0.14009863,"sulfur compound metabolic process"),
-c("GO:1901137","carbohydrate derivative biosynthetic process",4.348346716611784,0.551,0.9272166391770829,0.24343156,"sulfur compound metabolic process"),
-c("GO:0007040","lysosome organization",0.0510903030521121,0.43,0.9267232456784604,0.00908199,"lysosome organization"),
-c("GO:0006325","chromatin organization",1.6774440287109929,0.999,0.9204103811264344,0.34546742,"lysosome organization"),
-c("GO:0007033","vacuole organization",0.2695329154513942,0.985,0.9221411865613526,0.46389504,"lysosome organization"),
-c("GO:0007044","cell-substrate junction assembly",0.007514510537076566,0.999,0.9322577547637226,0.21487433,"lysosome organization"),
-c("GO:0016050","vesicle organization",0.4876752427915464,0.99,0.9186863932863554,0.49038109,"lysosome organization"),
-c("GO:0032508","DNA duplex unwinding",0.6331461244693385,0.678,0.9071238464786898,0.40286601,"lysosome organization"),
-c("GO:0033363","secretory granule organization",0.013315919425346944,0.806,0.9336544843244982,0.3085961,"lysosome organization"),
-c("GO:0036075","replacement ossification",0.0029979278854108276,0.999,0.9772027173012142,0.32975693,"lysosome organization"),
-c("GO:0060350","endochondral bone morphogenesis",0.0075637375959503065,0.999,0.9709348970682078,0.34621649,"lysosome organization"),
-c("GO:0070828","heterochromatin organization",0.009244841656488562,0.999,0.9420967276691743,0.21751411,"lysosome organization"),
-c("GO:0071825","protein-lipid complex organization",0.012055706718179173,0.556,0.9378090849642278,0.38270188,"lysosome organization"),
-c("GO:0071827","plasma lipoprotein particle organization",0.011725885423725109,0.556,0.9093729047661997,0.22062349,"lysosome organization"),
-c("GO:0097035","regulation of membrane lipid distribution",0.14550780197194738,0.556,0.8423635029210601,0.25999593,"lysosome organization"),
-c("GO:0015748","organophosphate ester transport",0.44071262862599747,0.021,0.9547877183248346,0,"organophosphate ester transport"),
-c("GO:0006897","endocytosis",0.5813395677106135,0.404,0.9401963852415006,0.2674944,"organophosphate ester transport"),
-c("GO:0015850","organic hydroxy compound transport",0.2193459289296152,0.376,0.957049763699204,0.2380509,"organophosphate ester transport"),
-c("GO:0034502","protein localization to chromosome",0.055427206938888696,0.995,0.9264100442212025,0.49236918,"organophosphate ester transport"),
-c("GO:0042908","xenobiotic transport",0.29624105624334235,0.989,0.9561021439684924,0.24441211,"organophosphate ester transport"),
-c("GO:0046618","xenobiotic export from cell",0.07588351125387177,0.989,0.9461818171157077,0.28899549,"organophosphate ester transport"),
-c("GO:0070198","protein localization to chromosome, telomeric region",0.004511659945778364,0.999,0.9365939019859363,0.4107635,"organophosphate ester transport"),
-c("GO:0071577","zinc ion transmembrane transport",0.12370513759676749,0.999,0.9432163765367758,0.30094079,"organophosphate ester transport"),
-c("GO:0071806","protein transmembrane transport",0.5926962501927855,0.302,0.9116052029056048,0.26047441,"organophosphate ester transport"),
-c("GO:0030574","collagen catabolic process",0.04133842268922402,0.141,0.9746997159242182,-0,"collagen catabolic process"),
-c("GO:0032259","methylation",2.6585910004764686,0.238,0.9687627287569889,0.06183463,"methylation"),
-c("GO:0032488","Cdc42 protein signal transduction",0.013847571661183347,0.169,0.8683124648418984,-0,"Cdc42 protein signal transduction"),
-c("GO:0006979","response to oxidative stress",0.7667902052527142,0.999,0.9276609298875907,0.32736149,"Cdc42 protein signal transduction"),
-c("GO:0007259","cell surface receptor signaling pathway via JAK-STAT",0.024003113906836116,0.995,0.8523960073276292,0.25667652,"Cdc42 protein signal transduction"),
-c("GO:0009410","response to xenobiotic stimulus",0.16516662793317585,0.989,0.91904324529681,0.43229557,"Cdc42 protein signal transduction"),
-c("GO:0010043","response to zinc ion",0.05409807634929769,0.988,0.9242748975007826,0.39340094,"Cdc42 protein signal transduction"),
-c("GO:0010634","positive regulation of epithelial cell migration",0.010221998775132322,0.996,0.869973734517421,0.39600784,"Cdc42 protein signal transduction"),
-c("GO:0019216","regulation of lipid metabolic process",0.10508254122483125,0.981,0.8989913154455726,0.26109144,"Cdc42 protein signal transduction"),
-c("GO:0031401","positive regulation of protein modification process",0.28232702805267945,0.975,0.8289596849028256,0.25147954,"Cdc42 protein signal transduction"),
-c("GO:0033273","response to vitamin",0.005454358123210505,0.999,0.9302471143937823,0.34211473,"Cdc42 protein signal transduction"),
-c("GO:0034405","response to fluid shear stress",0.0023875123553764393,0.556,0.9489808238778414,0.15101705,"Cdc42 protein signal transduction"),
-c("GO:0034616","response to laminar fluid shear stress",0.0007950170008109174,0.556,0.9517117761004161,0.2268701,"Cdc42 protein signal transduction"),
-c("GO:0043254","regulation of protein-containing complex assembly",0.27547216010451103,0.84,0.875696687161901,0.20706117,"Cdc42 protein signal transduction"),
-c("GO:0043627","response to estrogen",0.011287764599748814,0.999,0.9306116562538078,0.35686214,"Cdc42 protein signal transduction"),
-c("GO:0046890","regulation of lipid biosynthetic process",0.06460313071295401,0.796,0.8921756158692191,0.12676177,"Cdc42 protein signal transduction"),
-c("GO:0048010","vascular endothelial growth factor receptor signaling pathway",0.017192550311654047,0.999,0.8588820710456454,0.46804793,"Cdc42 protein signal transduction"),
-c("GO:0051052","regulation of DNA metabolic process",0.2657522773298909,0.999,0.8916513574769014,0.28162033,"Cdc42 protein signal transduction"),
-c("GO:0051128","regulation of cellular component organization",1.4586420587819326,0.815,0.8892377790725319,0.1674368,"Cdc42 protein signal transduction"),
-c("GO:0071353","cellular response to interleukin-4",0.0025475002967160973,0.452,0.9207282808204689,0.15152033,"Cdc42 protein signal transduction"),
-c("GO:0071478","cellular response to radiation",0.10494962816587215,0.999,0.9355264450060284,0.2167443,"Cdc42 protein signal transduction"),
-c("GO:0080090","regulation of primary metabolic process",14.365627383358822,0.886,0.8498131212918218,0.39862678,"Cdc42 protein signal transduction"),
-c("GO:0090329","regulation of DNA-templated DNA replication",0.050455273992640846,0.94,0.8979267467372751,0.22248732,"Cdc42 protein signal transduction"),
-c("GO:0097006","regulation of plasma lipoprotein particle levels",0.016478757957984803,0.556,0.9221648971539012,0.11636166,"Cdc42 protein signal transduction"),
-c("GO:0097306","cellular response to alcohol",0.04167562804250914,0.765,0.9006816071325293,0.32792948,"Cdc42 protein signal transduction"),
-c("GO:0097696","cell surface receptor signaling pathway via STAT",0.025120568143270038,0.999,0.8557848494077362,0.47872461,"Cdc42 protein signal transduction"),
-c("GO:1905952","regulation of lipid localization",0.03558624085982738,0.483,0.8747119869602584,0.11515859,"Cdc42 protein signal transduction"),
-c("GO:0032963","collagen metabolic process",0.04852065057890283,0.956,0.9786500558153679,0.04005793,"collagen metabolic process"),
-c("GO:0035988","chondrocyte proliferation",0.0032883675327659,0.999,0.9921456793777137,0.0077849,"chondrocyte proliferation"),
-c("GO:0043170","macromolecule metabolic process",33.33895178165279,0.954,0.9555697391186379,0.09636022,"macromolecule metabolic process"),
-c("GO:0055088","lipid homeostasis",0.1575659700430702,0.05,0.9576639290742714,-0,"lipid homeostasis"),
-c("GO:0043129","surfactant homeostasis",0.001905087178413777,0.989,0.9486792502539075,0.47820047,"lipid homeostasis"),
-c("GO:1902214","regulation of interleukin-4-mediated signaling pathway",0.00038397105921517984,0.622,0.8669575506534555,0.0981457,"regulation of interleukin-4-mediated signaling pathway"),
-c("GO:0035023","regulation of Rho protein signal transduction",0.08841672044312623,0.963,0.8489886140065461,0.410312,"regulation of interleukin-4-mediated signaling pathway"));
-
-stuff <- data.frame(revigo.data);
-names(stuff) <- revigo.names;
-
-stuff$value <- as.numeric( as.character(stuff$value) );
-stuff$frequency <- as.numeric( as.character(stuff$frequency) );
-stuff$uniqueness <- as.numeric( as.character(stuff$uniqueness) );
-stuff$dispensability <- as.numeric( as.character(stuff$dispensability) );
-
-# by default, outputs to a PDF file
-pdf( file="revigo_treemap.pdf", width=16, height=9 ) # width and height are in inches
-
-# check the tmPlot command documentation for all possible parameters - there are a lot more
-treemap(
-  stuff,
-  index = c("representative","description"),
-  vSize = "value",
-  type = "categorical",
-  vColor = "representative",
-  title = "Revigo TreeMap",
-  inflate.labels = FALSE,      # set this to TRUE for space-filling group labels - good for posters
-  lowerbound.cex.labels = 0,   # try to draw as many labels as possible (still, some small squares may not get a label)
-  bg.labels = "#CCCCCCAA",   # define background color of group labels
-								 # "#CCCCCC00" is fully transparent, "#CCCCCCAA" is semi-transparent grey, NA is opaque
-  position.legend = "none"
-)
-
-dev.off()
-```
-
-```{r cuadro dia 2 vs dia 3 - DIA 2}
-# Here is your data from Revigo. Scroll down for plot configuration options.
-
-revigo.names <- c("term_ID","description","frequency","value","uniqueness","dispensability","representative");
-revigo.data <- rbind(c("GO:0002252","immune effector process",0.11342160499804296,0.761,0.9356676647766118,-0,"immune effector process"),
-c("GO:0035010","encapsulation of foreign target",0.0005291908828927159,0.946,0.9481233701289702,0.492177,"immune effector process"),
-c("GO:0006582","melanin metabolic process",0.02156391313964225,0.946,0.9885304407815774,0.03326878,"melanin metabolic process"),
-c("GO:0007154","cell communication",9.236864411598072,0.944,0.9849626789485852,0.027143,"cell communication"),
-c("GO:0007158","neuron cell-cell adhesion",0.018305081842200595,0.946,0.9871367978873773,0.00990337,"neuron cell-cell adhesion"),
-c("GO:0007264","small GTPase-mediated signal transduction",0.3940010724607046,0,0.8244871714453025,0,"small GTPase-mediated signal transduction"),
-c("GO:0035556","intracellular signal transduction",4.385343312708344,0.014,0.7958035658852223,0.01554374,"intracellular signal transduction"),
-c("GO:0000165","MAPK cascade",0.14136534496772205,0.14,0.837098460165528,0.45619705,"intracellular signal transduction"),
-c("GO:0006954","inflammatory response",0.16248621457750065,0.929,0.9180224550211392,0.32488496,"intracellular signal transduction"),
-c("GO:0007204","positive regulation of cytosolic calcium ion concentration",0.08884745720827146,0.995,0.918606387644936,0.4769882,"intracellular signal transduction"),
-c("GO:0009719","response to endogenous stimulus",0.8237336056049143,0.929,0.9151278270219719,0.37206549,"intracellular signal transduction"),
-c("GO:0010506","regulation of autophagy",0.20040827938088707,0.938,0.9080507932284178,0.22441255,"intracellular signal transduction"),
-c("GO:0010977","negative regulation of neuron projection development",0.05294370181870846,0.908,0.9071172286117749,0.40869305,"intracellular signal transduction"),
-c("GO:0023052","signaling",9.184767415191992,0.843,0.890092448896923,0.35136898,"intracellular signal transduction"),
-c("GO:0035150","regulation of tube size",0.07517710295903358,0.185,0.9154612991380318,0.17785216,"intracellular signal transduction"),
-c("GO:0042752","regulation of circadian rhythm",0.04605683628227209,0.992,0.9301044443106209,0.17924533,"intracellular signal transduction"),
-c("GO:0043085","positive regulation of catalytic activity",0.6531716920191764,0.942,0.8978952204444487,0.22498575,"intracellular signal transduction"),
-c("GO:0048015","phosphatidylinositol-mediated signaling",0.08115080655336206,0.106,0.8487988433314456,0.43147831,"intracellular signal transduction"),
-c("GO:0048640","negative regulation of developmental growth",0.056603733645971106,0.918,0.9097357811337698,0.41061249,"intracellular signal transduction"),
-c("GO:0048678","response to axon injury",0.010010322421975235,0.873,0.9342944183894025,0.23905102,"intracellular signal transduction"),
-c("GO:0051051","negative regulation of transport",0.1163653831186927,0.868,0.8743405559664911,0.19605537,"intracellular signal transduction"),
-c("GO:0051056","regulation of small GTPase mediated signal transduction",0.24989870301960257,0.36,0.8591140838217619,0.22984394,"intracellular signal transduction"),
-c("GO:0051239","regulation of multicellular organismal process",0.8600139479948613,0.915,0.9124587649856342,0.24580275,"intracellular signal transduction"),
-c("GO:0071363","cellular response to growth factor stimulus",0.2033569802074241,0.473,0.8711014525570328,0.3162495,"intracellular signal transduction"),
-c("GO:1901652","response to peptide",0.29161617406215434,0.174,0.9081610312278449,0.32896651,"intracellular signal transduction"),
-c("GO:1901653","cellular response to peptide",0.00042827541220154676,0.039,0.9243387754374435,0.33085625,"intracellular signal transduction"),
-c("GO:0040007","growth",0.11510024770563755,0.934,1,-0,"growth"),
-c("GO:0042440","pigment metabolic process",0.481708923256049,0.945,0.9980465868558274,0.0430351,"pigment metabolic process"),
-c("GO:0042552","myelination",0.03146593603209526,0.095,0.7117801708821431,0.01027192,"myelination"),
-c("GO:0001775","cell activation",0.150135145506079,0.979,0.8061546191988321,0.48083209,"myelination"),
-c("GO:0001822","kidney development",0.04282015716132362,0.797,0.700830573418771,0.48712343,"myelination"),
-c("GO:0006949","syncytium formation",0.017837424782900055,0.991,0.7791334674208866,0.39645305,"myelination"),
-c("GO:0007424","open tracheal system development",0.004962087534473094,0.834,0.7501826377784504,0.42871826,"myelination"),
-c("GO:0007552","metamorphosis",0.00751943324296394,0.909,0.7533652373291432,0.42540011,"myelination"),
-c("GO:0007610","behavior",0.1060966186376303,0.411,0.8178898769798381,0.43044765,"myelination"),
-c("GO:0007618","mating",0.0003790483533278058,0.982,0.981486107458552,0.42416569,"myelination"),
-c("GO:0014902","myotube differentiation",0.02728902008665833,0.991,0.7758421519100229,0.40681331,"myelination"),
-c("GO:0019098","reproductive behavior",0.014864110426926098,0.982,0.8208703139168865,0.38032309,"myelination"),
-c("GO:0021700","developmental maturation",0.0871122033829721,0.264,0.7888892142012645,0.41525118,"myelination"),
-c("GO:0031099","regeneration",0.028851979205899606,0.967,0.7925860923884167,0.40821062,"myelination"),
-c("GO:0042303","molting cycle",0.020793509668268203,0.942,0.8341720948154618,0.38804095,"myelination"),
-c("GO:0046849","bone remodeling",0.01153389989411752,0.359,0.8353819764231033,0.37469185,"myelination"),
-c("GO:0048036","central complex development",0.00012306764718435253,0.946,0.7714495988184658,0.40444125,"myelination"),
-c("GO:0048771","tissue remodeling",0.021502379316050074,0.744,0.8338661996024372,0.3888289,"myelination"),
-c("GO:0042592","homeostatic process",1.9296957851447603,0.906,1,-0,"homeostatic process"),
-c("GO:0043473","pigmentation",0.043122903573397126,0.98,1,-0,"pigmentation"),
-c("GO:0043543","protein acylation",0.15423822086320535,0.98,0.9956210563064259,0.06304349,"protein acylation"),
-c("GO:0006473","protein acetylation",0.07209302772059371,0.98,0.9957156185920091,0.33348198,"protein acylation"),
-c("GO:0045216","cell-cell junction organization",0.15141997174268365,0.006,0.9020963656171397,0,"cell-cell junction organization"),
-c("GO:0006911","phagocytosis, engulfment",0.037323956038070434,0.809,0.8532066349102361,0.25504165,"cell-cell junction organization"),
-c("GO:0016050","vesicle organization",0.4876752427915464,0.961,0.9216302395679565,0.37677486,"cell-cell junction organization"),
-c("GO:0030030","cell projection organization",1.214633373356573,0.988,0.9194214765259259,0.4157328,"cell-cell junction organization"),
-c("GO:0030198","extracellular matrix organization",0.23021526352893723,0.028,0.9295164235394346,0.29196579,"cell-cell junction organization"),
-c("GO:0034330","cell junction organization",0.326665839980258,0.17,0.9276000626503272,0.36188374,"cell-cell junction organization"),
-c("GO:0043062","extracellular structure organization",0.23198743764839191,0.012,0.9294754856988742,0.30222597,"cell-cell junction organization"),
-c("GO:0045229","external encapsulating structure organization",1.2096737471750436,0.152,0.9194496495574057,0.35006659,"cell-cell junction organization"),
-c("GO:0048284","organelle fusion",0.2981486047746998,0.988,0.9245619791627769,0.4572252,"cell-cell junction organization"),
-c("GO:0120036","plasma membrane bounded cell projection organization",0.9932494441895849,0.999,0.9019654471082791,0.40646569,"cell-cell junction organization"),
-c("GO:0046488","phosphatidylinositol metabolic process",0.5268402908314948,0.106,0.9859722554942583,0.01785841,"phosphatidylinositol metabolic process"),
-c("GO:0072593","reactive oxygen species metabolic process",0.33140640574979924,0.824,0.9868290676660619,0.10196043,"phosphatidylinositol metabolic process"),
-c("GO:0051179","localization",19.630402257434774,0.844,1,-0,"localization"),
-c("GO:0055074","calcium ion homeostasis",0.27711388251795027,0.921,0.9639863176248624,-0,"calcium ion homeostasis"),
-c("GO:0072659","protein localization to plasma membrane",0.18653363283732313,0.16,0.8981533335325836,0.0158882,"protein localization to plasma membrane"),
-c("GO:0016192","vesicle-mediated transport",2.591260690701909,0.339,0.9102078169749634,0.37554787,"protein localization to plasma membrane"),
-c("GO:0030001","metal ion transport",2.557289097373141,0.318,0.9112801505604116,0.26299888,"protein localization to plasma membrane"),
-c("GO:0032940","secretion by cell",0.7365032572806451,0.326,0.9029292739172545,0.32046788,"protein localization to plasma membrane"),
-c("GO:0051641","cellular localization",5.613085851842994,0.917,0.9047239330738013,0.40057274,"protein localization to plasma membrane"),
-c("GO:0051650","establishment of vesicle localization",0.18665670048450747,0.587,0.8871961051463861,0.4325932,"protein localization to plasma membrane"),
-c("GO:0140352","export from cell",0.8941406065590821,0.997,0.919574348916163,0.32788198,"protein localization to plasma membrane"),
-c("GO:0140253","cell-cell fusion",0.01657228936984491,0.991,0.9912427709044902,0.00983857,"cell-cell fusion"));
-
-stuff <- data.frame(revigo.data);
-names(stuff) <- revigo.names;
-
-stuff$value <- as.numeric( as.character(stuff$value) );
-stuff$frequency <- as.numeric( as.character(stuff$frequency) );
-stuff$uniqueness <- as.numeric( as.character(stuff$uniqueness) );
-stuff$dispensability <- as.numeric( as.character(stuff$dispensability) );
-
-# by default, outputs to a PDF file
-pdf( file="revigo_treemap.pdf", width=16, height=9 ) # width and height are in inches
-
-# check the tmPlot command documentation for all possible parameters - there are a lot more
-treemap(
-  stuff,
-  index = c("representative","description"),
-  vSize = "value",
-  type = "categorical",
-  vColor = "representative",
-  title = "Revigo TreeMap",
-  inflate.labels = FALSE,      # set this to TRUE for space-filling group labels - good for posters
-  lowerbound.cex.labels = 0,   # try to draw as many labels as possible (still, some small squares may not get a label)
-  bg.labels = "#CCCCCCAA",   # define background color of group labels
-								 # "#CCCCCC00" is fully transparent, "#CCCCCCAA" is semi-transparent grey, NA is opaque
-  position.legend = "none"
-)
-
-dev.off()
-```
-
-
-#NIVELES EXPRESION GENES CANDIDATO
+#NIVELES EXPRESION GENES CANDIDATO CON ISOFORMAS
+Este analisis lo hago porque quiero ver el patron de expresion de las diferentes isoformas que aparecieron
 ```{r preparo el listado, eval = FALSE}
 #necesito el archivo de counts normalizado *NAIco_datos_FILTTMM*
 conteos_tib <- as_tibble(NAIco_datos_FILTTMM, rownames = "gene_id")
@@ -2766,116 +1309,6 @@ ggplot(expresion_SVEP1_largo, aes(x = Dia, y = Expresion, color = gene_id, group
   theme(legend.position = "none", plot.title = element_text(hjust = 0.5))
 ```
 
-#GRAFICOS EXPRESION GENES CANDIDATO
-##lineas
-```{r genes sistema inmune}
-# Especificar los gene_id que quiero incluir en el gráfico (hacer lo mismo de a 5 genes por vez)
-genes_inmune <- c("TRINITY_DN19792_c0_g1_i2", "TRINITY_DN4049_c0_g1_i5", "TRINITY_DN19634_c0_g1_i1", "TRINITY_DN3167_c0_g1_i3", "TRINITY_DN3381_c0_g1_i2")
-# Filtrar el data frame para incluir solo los genes que quiero y luego las columnas que quiero
-expr_inmune <- expr_Rjoin[expr_Rjoin$gene_id %in% genes_inmune, ]
-expr_inmune <- expr_inmune[, c("D1", "D2", "D3", "gene_name")]
-
-# Convertir el data frame a formato largo para ggplot2 
-expresion_inmune_largo <- reshape2::melt(expr_inmune, id.vars = "gene_name", variable.name = "Dia", value.name = "Expresion")
-
-ggplot(expresion_inmune_largo, aes(x = Dia, y = Expresion, color = gene_name, group = gene_name)) + geom_line(size = 1.2) + geom_point(size = 1.2) + labs(title = "Genes de sistema inmune", x = "Día post amputación", y = "Nivel de expresión relativa") + theme_minimal() + theme(plot.title = element_text(hjust = 0.5))
-
-#####
-
-# Especificar los gene_id que quiero incluir en el gráfico (hacer lo mismo de a 5 genes por vez)
-genes_inmune <- c("TRINITY_DN274_c0_g1_i1", "TRINITY_DN7244_c0_g1_i1", "TRINITY_DN1936_c0_g1_i1", "TRINITY_DN3901_c2_g1_i1", "TRINITY_DN4261_c0_g1_i1")
-# Filtrar el data frame para incluir solo los genes que quiero y luego las columnas que quiero
-expr_inmune <- expr_Rjoin[expr_Rjoin$gene_id %in% genes_inmune, ]
-expr_inmune <- expr_inmune[, c("D1", "D2", "D3", "gene_name")]
-
-# Convertir el data frame a formato largo para ggplot2 
-expresion_inmune_largo <- reshape2::melt(expr_inmune, id.vars = "gene_name", variable.name = "Dia", value.name = "Expresion")
-
-ggplot(expresion_inmune_largo, aes(x = Dia, y = Expresion, color = gene_name, group = gene_name)) + geom_line(size = 1.2) + geom_point(size = 1.2) + labs(title = "Genes de sistema inmune", x = "Día post amputación", y = "Nivel de expresión relativa") + theme_minimal() + theme(plot.title = element_text(hjust = 0.5))
-
-```
-
-
-```{r genes regeneracion}
-# Especificar los gene_id que quiero incluir en el gráfico
-genes_regen <- c("TRINITY_DN4047_c0_g1_i1")
-# Filtrar el data frame para incluir solo los genes que quiero y luego las columnas que quiero
-expr_regen <- expr_Rjoin[expr_Rjoin$gene_id %in% genes_regen, ]
-expr_regen <- expr_regen[, c("D1", "D2", "D3", "gene_name")]
-
-# Convertir el data frame a formato largo para ggplot2 
-expresion_regen_largo <- reshape2::melt(expr_regen, id.vars = "gene_name", variable.name = "Dia", value.name = "Expresion")
-
-ggplot(expresion_regen_largo, aes(x = Dia, y = Expresion, color = gene_name, group = gene_name)) + geom_line(size = 1.2) + geom_point(size = 1.2) + labs(title = "Genes de regeneración", x = "Día post amputación", y = "Nivel de expresión relativa") + theme_minimal() + theme(plot.title = element_text(hjust = 0.5))
-
-######
-
-# Especificar los gene_id que quiero incluir en el gráfico
-genes_regen <- c("TRINITY_DN7519_c0_g1_i1", "TRINITY_DN17818_c0_g1_i2", "TRINITY_DN15514_c0_g1_i2", "TRINITY_DN6492_c0_g1_i4", "TRINITY_DN47454_c0_g1_i1", "TRINITY_DN6966_c0_g1_i3")
-# Filtrar el data frame para incluir solo los genes que quiero y luego las columnas que quiero
-expr_regen <- expr_Rjoin[expr_Rjoin$gene_id %in% genes_regen, ]
-expr_regen <- expr_regen[, c("D1", "D2", "D3", "gene_name")]
-
-# Convertir el data frame a formato largo para ggplot2 
-expresion_regen_largo <- reshape2::melt(expr_regen, id.vars = "gene_name", variable.name = "Dia", value.name = "Expresion")
-
-ggplot(expresion_regen_largo, aes(x = Dia, y = Expresion, color = gene_name, group = gene_name)) + geom_line(size = 1.2) + geom_point(size = 1.2) + labs(title = "Genes de regeneración", x = "Día post amputación", y = "Nivel de expresión relativa") + theme_minimal() + theme(plot.title = element_text(hjust = 0.5))
-
-#####
-
-# Especificar los gene_id que quiero incluir en el gráfico
-genes_regen <- c("TRINITY_DN37_c0_g1_i1", "TRINITY_DN36524_c0_g1_i1", "TRINITY_DN12676_c0_g1_i1", "TRINITY_DN1701_c0_g1_i2", "TRINITY_DN900_c0_g1_i14")
-# Filtrar el data frame para incluir solo los genes que quiero y luego las columnas que quiero
-expr_regen <- expr_Rjoin[expr_Rjoin$gene_id %in% genes_regen, ]
-expr_regen <- expr_regen[, c("D1", "D2", "D3", "gene_name")]
-
-# Convertir el data frame a formato largo para ggplot2 
-expresion_regen_largo <- reshape2::melt(expr_regen, id.vars = "gene_name", variable.name = "Dia", value.name = "Expresion")
-
-ggplot(expresion_regen_largo, aes(x = Dia, y = Expresion, color = gene_name, group = gene_name)) + geom_line(size = 1.2) + geom_point(size = 1.2) + labs(title = "Genes de regeneración", x = "Día post amputación", y = "Nivel de expresión relativa") + theme_minimal() + theme(plot.title = element_text(hjust = 0.5))
-
-######
-
-# Especificar los gene_id que quiero incluir en el gráfico
-genes_regen <- c("TRINITY_DN1520_c0_g1_i4", "TRINITY_DN48684_c0_g1_i2", "TRINITY_DN10849_c0_g1_i1", "TRINITY_DN3389_c0_g1_i1", "TRINITY_DN1016_c0_g1_i2", "TRINITY_DN15746_c0_g1_i6", "TRINITY_DN12027_c0_g1_i1")
-# Filtrar el data frame para incluir solo los genes que quiero y luego las columnas que quiero
-expr_regen <- expr_Rjoin[expr_Rjoin$gene_id %in% genes_regen, ]
-expr_regen <- expr_regen[, c("D1", "D2", "D3", "gene_name")]
-
-# Convertir el data frame a formato largo para ggplot2 
-expresion_regen_largo <- reshape2::melt(expr_regen, id.vars = "gene_name", variable.name = "Dia", value.name = "Expresion")
-
-ggplot(expresion_regen_largo, aes(x = Dia, y = Expresion, color = gene_name, group = gene_name)) + geom_line(size = 1.2) + geom_point(size = 1.2) + labs(title = "Genes de regeneración", x = "Día post amputación", y = "Nivel de expresión relativa") + theme_minimal() + theme(plot.title = element_text(hjust = 0.5))
-
-######
-
-# Especificar los gene_id que quiero incluir en el gráfico
-genes_regen <- c("TRINITY_DN4583_c0_g1_i2", "TRINITY_DN900_c0_g1_i13", "TRINITY_DN38828_c0_g1_i1")
-# Filtrar el data frame para incluir solo los genes que quiero y luego las columnas que quiero
-expr_regen <- expr_Rjoin[expr_Rjoin$gene_id %in% genes_regen, ]
-expr_regen <- expr_regen[, c("D1", "D2", "D3", "gene_name")]
-
-# Convertir el data frame a formato largo para ggplot2 
-expresion_regen_largo <- reshape2::melt(expr_regen, id.vars = "gene_name", variable.name = "Dia", value.name = "Expresion")
-
-ggplot(expresion_regen_largo, aes(x = Dia, y = Expresion, color = gene_name, group = gene_name)) + geom_line(size = 1.2) + geom_point(size = 1.2) + labs(title = "Genes de regeneración", x = "Día post amputación", y = "Nivel de expresión relativa") + theme_minimal() + theme(plot.title = element_text(hjust = 0.5))
-```
-
-```{r genes neurales}
-# Especificar los gene_id que quiero incluir en el gráfico
-
-genes_neuro <- c("TRINITY_DN8214_c0_g1_i1", "TRINITY_DN74611_c0_g1_i1", "TRINITY_DN5218_c0_g1_i2", "TRINITY_DN2250_c0_g1_i1", "TRINITY_DN3874_c0_g1_i1")
-# Filtrar el data frame para incluir solo los genes que quiero y luego las columnas que quiero
-expr_neuro <- expr_Rjoin[expr_Rjoin$gene_id %in% genes_neuro, ]
-expr_neuro <- expr_neuro[, c("D1", "D2", "D3", "gene_name")]
-
-# Convertir el data frame a formato largo para ggplot2 
-expresion_neuro_largo <- reshape2::melt(expr_neuro, id.vars = "gene_name", variable.name = "Dia", value.name = "Expresion")
-
-ggplot(expresion_neuro_largo, aes(x = Dia, y = Expresion, color = gene_name, group = gene_name)) + geom_line(size = 1.2) + geom_point(size = 1.2) + labs(title = "Genes neurales", x = "Día post amputación", y = "Nivel de expresión relativa") + theme_minimal() + theme(plot.title = element_text(hjust = 0.5))
-```
-
-
 #BUSCOs
 ```{r, grafico de BUSCOs}
 library(tidyr)
@@ -2905,3 +1338,619 @@ ggplot(busco, aes(x = Porcentaje, y = Dataset, fill = Categoria)) +
   theme_minimal(base_size = 14) +
   theme(plot.title = element_text(hjust = 0.5))
 ```
+
+
+#BUSCOs (NAIS - PRISTINA)
+```{r, grafico de BUSCOs}
+# Datos en formato largo
+busco2 <- data.frame(
+  Dataset = rep(c("P. leidyi", "N. communis"), each = 4),
+  Categoria = rep(c("Copia simple", "Duplicados", "Fragmentados", "Ausentes"), 2),
+  Porcentaje = c(78.0, 20.3, 0.8, 1.0,
+                 70.1, 20.2, 7.5, 2.2)
+)
+busco2$Categoria <- factor(busco2$Categoria, levels = c("Ausentes", "Fragmentados", "Duplicados", "Copia simple"))
+
+# Gráfico de barras apiladas horizontal
+ggplot(busco2, aes(x = Porcentaje, y = Dataset, fill = Categoria)) +
+  geom_bar(stat = "identity") +
+  scale_fill_manual(values = c(
+    "Copia simple" = "#BB5137",
+    "Duplicados" = "#BB6449",
+    "Fragmentados" = "snow4",
+    "Ausentes" = "snow3"
+  )) +
+  labs(title = "Resultados BUSCO Naididae)",
+       x = "% de genes ortólogos",
+       y = "Dataset") +
+  theme_minimal(base_size = 14) +
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+#GO ENRICHMENT ANALISIS
+primero tengo que hacer la anotacion de todos los genes, no solo los GDE
+```{r, anotacion}
+#preparo tablas
+##agrego columna con 1's en todo mi listado de GDE
+NOI_res_tot_GO <- NOI_res_tot[, 1, drop = FALSE] # Conserva solo la primera columna
+NOI_res_tot_GO$estado <- 1 #2094
+
+##agrego columna con 0's en todo mi listado de genes base
+NAIco_GO <- NAIco_filt_TMM_cpm_df
+NAIco_GO$gene_id <- rownames(NAIco_GO)# Crea la columna 'gene_id' con los nombres de fila
+rownames(NAIco_GO) <- NULL# Elimina los nombres de fila
+
+NAIco_GO <- NAIco_GO[, 4, drop = FALSE] # Conserva solo la ultima columna "gene_id"
+NAIco_GO$estado <- 0
+
+##uno ambas tablas de estado
+# Join por gene_id
+NAIco_estado_GO <- NAIco_GO %>%
+  left_join(NOI_res_tot_GO, by = "gene_id", suffix = c("_base", "_degs")) %>%
+  mutate(estado = ifelse(!is.na(estado_degs), 1, estado_base)) %>%
+  select(gene_id, estado)
+sum(NAIco_estado_GO$estado == 1)#1462 GDE con valor 1
+
+#uno la tabla de los estados con las anotaciones de CAPte para agregar columna "target_id"
+nai_to_cap_table_sinP_filt <- nai_to_cap_table_sinP %>%
+  group_by(gene_id) %>%
+  slice_min(order_by = evalue, with_ties = FALSE) %>%
+  ungroup()#primero filtro los gene_id
+
+NAIco_anot_GO <- NAIco_estado_GO %>%
+  inner_join(nai_to_cap_table_sinP_filt, by = "gene_id") %>%
+  select(gene_id, target_id, estado)
+sum(NAIco_anot_GO$estado == 1)#978
+
+#uno la tabla con otra para cargar los go_ids y los nombres de los genes
+NAIco_anot_GO <- NAIco_anot_GO %>%
+  inner_join(CAPte_go_annotations_group, by = "target_id") %>%
+  select(gene_id, target_id, estado, go_ids, uniprot_name)
+#filtro la tabla para que conserve solo un nombre de gen por target_id
+NAIco_anot_GO_filtrado <- NAIco_anot_GO %>%
+  distinct(gene_id, .keep_all = TRUE)
+sum(NAIco_anot_GO_filtrado$estado == 1)
+
+#separar todos los terminos GO en filas diferentes
+NAIco_anot_GO_fil_expandido <- NAIco_anot_GO_filtrado %>%
+  separate_rows(go_ids, sep = ",")
+```
+
+
+```{r analisis 'Hyper'}
+#primero modifico mi dataframe para que coincida con lo que necesita el test
+NAIco_GOhyper <- NAIco_anot_GO_filtrado[, 2:3]
+sum(NAIco_GOhyper$estado == 1)
+#cambio nombres de columnas para que coicida con lo que espera go_enrich
+colnames(NAIco_GOhyper) <- c("gene", "score")
+
+#analisis
+resultado_GO <- go_enrich(
+  genes = NAIco_GOhyper,
+  test = "hyper",              # Test hipergeométrico
+  n_randsets = 1000,           # Número de permutaciones para FWER
+  annotations = as.data.frame(CAPte_go_annotations),
+  organismDb = "Homo.sapiens", # Cambiá si usás otro organismo
+  silent = FALSE               # Mostrar progreso
+)
+
+gos_sifnif=
+  resultado_GO$results %>% 
+  filter(ontology=="biological_process", 
+         FWER_overrep<=0.05) %>% 
+  select(node_id) %>% unlist()
+
+genes_with_signifGO=
+CAPte_go_annotations %>% 
+  as.data.frame() %>% 
+  `names<-`(c("target_id", "go")) %>% #count(go) %>% count(n)
+  filter(go %in% gos_sifnif)
+
+```
+
+armo tabla para comparar con mis resultados manuales
+```{r}
+#tabla de CAPte la dejo solo con target_id y uniprot_names
+GO_signif_names= genes_with_signifGO %>%
+  inner_join(CAPte_go_annotations_group, by = "target_id") %>%
+  select(target_id, go, uniprot_name)
+
+#remuevo todo lo que hay despues del _ en uniprot_name
+GO_signif_names$uniprot_name <- sub("_.*", "", GO_signif_names$uniprot_name)
+
+#filtro para remover genes duplicados
+GO_signif_names_filt= GO_signif_names %>%
+  distinct(uniprot_name, go, .keep_all = TRUE)
+
+  
+#guardo tabla con nombres fuera de R
+write_tsv(GO_signif_names_filt, "GO_signif_names_filt.tsv")
+```
+
+
+le quiero poner de que test salio cada gen
+```{r}
+GO_res_test= GO_join_filtrado %>%
+  inner_join(nai_to_cap_table_sinP_filt, by = "gene_id") %>%
+  select(gene_id, target_id, test)
+
+#ahora solo los genes con go significativo
+GO_res_sign_test= GO_signif_names_filt %>%
+  inner_join(GO_res_test, by = "target_id") %>%
+  select(gene_id, target_id, test, go, uniprot_name)
+
+#y si filtro los que no tienen test(?)
+GO_res_sign_test_filt= GO_res_sign_test %>%
+  filter(!is.na(test))
+write_tsv(GO_res_sign_test_filt, "GO con genes y test.tsv")
+```
+
+```{r intento con wilcoxon de nuevo}
+#pongo nombre de filas como columna con nombre 'gene_id'
+NAIco_con_gene_id <- cbind(gene_id = rownames(NAIco_filt_TMM_cpm_df), NAIco_filt_TMM_cpm_df)
+rownames(NAIco_con_gene_id) <- NULL
+
+#junto tablas NOI_res_tot con NAIco_filt_TMM_cpm_df (full join) dejando solo las columnas 'gene_id' 'prob' 'test' 
+GO_join <- full_join(NAIco_con_gene_id, NOI_res_tot, by = "gene_id", suffix = c(".all", ".de")) %>%
+  select(gene_id, prob, test)
+
+# elimino gene_id repetidos conservando los que tienen valor en prob
+GO_join_filtrado <- GO_join %>%
+  group_by(gene_id) %>%
+  filter(!(is.na(prob) & any(!is.na(prob)))) %>%
+  ungroup()
+sum(!is.na(GO_join_filtrado$prob))#2094#compruebo cuantos transcriptos tengo con valor de prob
+#a todos los NA les doy valor 0
+GO_join_filtrado$prob[is.na(GO_join_filtrado$prob)] <- 0
+
+#agrego a esta planilla las anotaciones de CAPte para que tenga los target id
+GO_join_target <- inner_join(GO_join_filtrado, nai_to_cap_table_sinP_filt, by = "gene_id")%>%
+  select(target_id, prob)
+sum(GO_join_target$prob != 0)
+
+#cambio nombre a las columnas
+GO_join_target <- GO_join_target %>%
+  select(gene = target_id, score = prob)
+colnames(CAPte_go_annotations) <- c("target_id")
+
+
+GO_input_filtrado <- GO_input %>%
+  group_by(gene) %>%
+  slice_max(score, with_ties = FALSE) %>%  # Conserva el score más alto por gene
+  ungroup()
+
+GO_input_limpio <- GO_input_filtrado %>%
+  as.data.frame() %>%        # Convierte a data.frame base
+  ungroup() %>%              # Elimina agrupamientos si quedaron
+  select(gene, score)
+
+##ANALISIS##
+GO_results_all <- go_enrich(GO_input_limpio, test = "wilcoxon", n_randsets = 1000, 
+                                          annotations = as.data.frame(CAPte_go_annotations))
+save(GO_results_all, file = "GO_results_all")
+
+#ahora le vuelvo a unir los gene_id y test y le pongo los nombres de los genes para exportar
+
+
+#guardo analisis fuera de R
+write_tsv(GO_results_all[[1]], "GO_results_all.tsv")
+```
+
+
+```{r, grafico}
+#extraigo tabla de resultados y filtro las ontologias que no me interesan
+results_table_PB <- GO_results_all$results %>%
+  filter(!ontology %in% c("cellular_component", "molecular_function"))
+
+#selecciono los TOP 50, 60(?)
+results_table_PB_top50 <- results_table_PB[1:50, ]
+
+
+#graficos
+custom_colors <- c(
+  "biological_process" = "salmon"
+)
+
+#
+ggplot(results_table_PB_top50, aes(x = reorder(node_name, -FWER_high_rank), y = -log10(FWER_high_rank), fill = ontology)) +
+    geom_bar(stat = "identity") +
+    coord_flip() +
+    labs(title = "Top 50 Términos de enriquecimiento GO",
+         x = "Términos GO",
+         y = "-log10(FWER_high_rank)",
+         fill = "Ontology") +
+    theme_minimal() +
+    theme(axis.text.y = element_text(size = 8)) +  # Ajusta el tamaño del texto
+    facet_wrap(~ ontology, scales = "free_y", ncol = 1) + # Agrupa por ontología en diferentes paneles
+  scale_fill_manual(values = custom_colors)
+
+```
+
+#GO con ENRICHER para GOPLOT
+```{r}
+#filtro el archivo de anotaciones con nombres por los evalue mas bajo
+CAPte_trinnotate_genenames_1 = CAPte_trinnotate_genenames_1[order(CAPte_trinnotate_genenames_1$target_id, CAPte_trinnotate_genenames_1$evalue), ]
+CAPte_trinnotate_genenames_1 <- CAPte_trinnotate_genenames_1[!duplicated(CAPte_trinnotate_genenames_1$target_id), ]
+
+#hago lista de los genes DE en cada contraste y la convierto a vector para que se compatible con enrichr
+#DIA 1 vs 2
+NOI_res_1.2.tib.name <- NOI_res_1.2.tib %>%
+  dplyr::left_join(
+    CAPte_trinnotate_genenames_1 %>%
+      dplyr::select(target_id, uniprot_name),
+    by = "target_id"
+  )
+NOI_DEgenes_input_1.2 <- sub("_.*", "", NOI_res_1.2.tib.name$uniprot_name)
+
+#DIA 1 vs 3
+NOI_res_1.3.tib.name <- NOI_res_1.3.tib %>%
+  dplyr::left_join(
+    CAPte_trinnotate_genenames_1 %>%
+      dplyr::select(target_id, uniprot_name),
+    by = "target_id"
+  )
+NOI_DEgenes_input_1.3 <- sub("_.*", "", NOI_res_1.3.tib.name$uniprot_name)
+
+
+#DIA 2 vs 3
+NOI_res_2.3.tib.name <- NOI_res_2.3.tib %>%
+  dplyr::left_join(
+    CAPte_trinnotate_genenames_1 %>%
+      dplyr::select(target_id, uniprot_name),
+    by = "target_id"
+  )
+NOI_DEgenes_input_2.3 <- sub("_.*", "", NOI_res_2.3.tib.name$uniprot_name)
+```
+
+preparo elemento universe, con mis genes totales, por nombre
+```{r, armado vector}
+NAIco_univ= unique(sub("_.*", "", NAIco_anot_GO$uniprot_name))
+```
+
+
+```{r analisis enriquecimiento con 'enricher'}
+#DIA 1 vs 2
+NOI_enrich_result_1.2 <- enricher(NOI_DEgenes_input_1.2, universe = NAIco_univ,  
+                          TERM2GENE = term2gene)
+#DIA 1 vs 3
+NOI_enrich_result_1.3 <- enricher(NOI_DEgenes_input_1.3, universe = NAIco_univ,
+                          TERM2GENE = term2gene)
+#DIA 2 vs 3
+NOI_enrich_result_2.3 <- enricher(NOI_DEgenes_input_2.3, universe = NAIco_univ,
+                          TERM2GENE = term2gene)
+```
+
+#GO graficos
+```{r preparar inputs}
+#DIA 1 vs 2
+NOI_DEgenes_togo_1.2 <- NOI_res_1.2.tib.name %>%
+  dplyr::select(ID = uniprot_name, logFC = M, P.Value = prob) %>%
+  na.omit()
+NOI_DEgenes_togo_1.2= NOI_DEgenes_togo_1.2[!duplicated(NOI_DEgenes_togo_1.2$ID), ]
+NOI_DEgenes_togo_1.2$ID <- sub("_.*", "", NOI_DEgenes_togo_1.2$ID)
+
+#DIA 1 vs 3
+NOI_DEgenes_togo_1.3 <- NOI_res_1.3.tib.name %>%
+  dplyr::select(ID = uniprot_name, logFC = M, P.Value = prob) %>%
+  na.omit()
+NOI_DEgenes_togo_1.3= NOI_DEgenes_togo_1.3[!duplicated(NOI_DEgenes_togo_1.3$ID), ]
+NOI_DEgenes_togo_1.3$ID <- sub("_.*", "", NOI_DEgenes_togo_1.3$ID)
+
+#DIA 2 vs 3
+NOI_DEgenes_togo_2.3 <- NOI_res_2.3.tib.name %>%
+  dplyr::select(ID = uniprot_name, logFC = M, P.Value = prob) %>%
+  na.omit()
+NOI_DEgenes_togo_2.3= NOI_DEgenes_togo_2.3[!duplicated(NOI_DEgenes_togo_2.3$ID), ]
+NOI_DEgenes_togo_2.3$ID <- sub("_.*", "", NOI_DEgenes_togo_2.3$ID)
+
+#convertir resultados a tablas
+#DIA 1 vs 2
+NOI_enrich_table_1.2 <- as.data.frame(NOI_enrich_result_1.2) %>%
+  dplyr::select(GO_ID = ID,
+                adj_pval = p.adjust,
+                Genes = geneID, Count) %>%
+  dplyr::mutate(Genes = gsub("/", ", ", Genes))
+#DIA 1 vs 3
+NOI_enrich_table_1.3 <- as.data.frame(NOI_enrich_result_1.3) %>%
+  dplyr::select(GO_ID = ID,
+                adj_pval = p.adjust,
+                Genes = geneID, Count) %>%
+  dplyr::mutate(Genes = gsub("/", ", ", Genes))
+#DIA 2 vs 3
+NOI_enrich_table_2.3 <- as.data.frame(NOI_enrich_result_2.3) %>%
+  dplyr::select(GO_ID = ID,
+                adj_pval = p.adjust,
+                Genes = geneID, Count) %>%
+  dplyr::mutate(Genes = gsub("/", ", ", Genes))
+
+#agregarle "ontologia" y "descripcion"  a las tablas
+#DIA 1 vs 2
+NOI_go_ids_1.2 <- NOI_enrich_table_1.2$GO_ID  # tus GO terms enriquecidos
+NOI_go_info_1.2 <- tibble::tibble(
+  GO_ID = NOI_go_ids_1.2,
+  Term = sapply(NOI_go_ids_1.2, function(x) Term(GOTERM[[x]])),
+  Category = sapply(NOI_go_ids_1.2, function(x) Ontology(GOTERM[[x]])),
+  Definition = sapply(NOI_go_ids_1.2, function(x) Definition(GOTERM[[x]]))
+)
+NOI_enrich_table_full_1.2 <- NOI_enrich_table_1.2 %>%
+  dplyr::left_join(NOI_go_info_1.2, by = "GO_ID")
+NOI_enrich_table_full_1.2 <- NOI_enrich_table_full_1.2 %>%
+  rename(ID = GO_ID)
+NOI_enrich_table_BP_1.2 <- NOI_enrich_table_full_1.2[NOI_enrich_table_full_1.2$Category == "BP", ]
+NOI_enrich_table_reord_1.2 <- NOI_enrich_table_BP_1.2 %>%
+  select(Category, ID, Term, Genes, adj_pval)
+
+#DIA 1 vs 3
+NOI_go_ids_1.3 <- NOI_enrich_table_1.3$GO_ID  # tus GO terms enriquecidos
+NOI_go_info_1.3 <- tibble::tibble(
+  GO_ID = NOI_go_ids_1.3,
+  Term = sapply(NOI_go_ids_1.3, function(x) Term(GOTERM[[x]])),
+  Category = sapply(NOI_go_ids_1.3, function(x) Ontology(GOTERM[[x]])),
+  Definition = sapply(NOI_go_ids_1.3, function(x) Definition(GOTERM[[x]]))
+)
+NOI_enrich_table_full_1.3 <- NOI_enrich_table_1.3 %>%
+  dplyr::left_join(NOI_go_info_1.3, by = "GO_ID")
+NOI_enrich_table_full_1.3 <- NOI_enrich_table_full_1.3 %>%
+  rename(ID = GO_ID)
+NOI_enrich_table_BP_1.3 <- NOI_enrich_table_full_1.3[NOI_enrich_table_full_1.3$Category == "BP", ]
+NOI_enrich_table_reord_1.3 <- NOI_enrich_table_BP_1.3 %>%
+  select(Category, ID, Term, Genes, adj_pval)
+
+#DIA 2 vs 3
+NOI_go_ids_2.3 <- NOI_enrich_table_2.3$GO_ID  # tus GO terms enriquecidos
+NOI_go_info_2.3 <- tibble::tibble(
+  GO_ID = NOI_go_ids_2.3,
+  Term = sapply(NOI_go_ids_2.3, function(x) Term(GOTERM[[x]])),
+  Category = sapply(NOI_go_ids_2.3, function(x) Ontology(GOTERM[[x]])),
+  Definition = sapply(NOI_go_ids_2.3, function(x) Definition(GOTERM[[x]]))
+)
+NOI_enrich_table_full_2.3 <- NOI_enrich_table_2.3 %>%
+  dplyr::left_join(NOI_go_info_2.3, by = "GO_ID")
+NOI_enrich_table_full_2.3 <- NOI_enrich_table_full_2.3 %>%
+  rename(ID = GO_ID)
+NOI_enrich_table_BP_2.3 <- NOI_enrich_table_full_2.3[NOI_enrich_table_full_2.3$Category == "BP", ]
+NOI_enrich_table_reord_2.3 <- NOI_enrich_table_BP_2.3 %>%
+  select(Category, ID, Term, Genes, adj_pval)
+
+#preparo el vector con el listado de los GO que me interesan, top 10 pvalor mas bajos
+#DIA 1 vs 2
+GO10_list_1.2 = c("GO:2000035", "GO:0007155", "GO:0007293", "GO:0036011", "GO:0036099", "GO:0048664", "GO:0048803", "GO:0060674", "GO:0050768", "GO:0007403")
+
+#DIA 1 vs 3
+GO10_list_1.3 = c("GO:0003281", "GO:0007403", "GO:0010838", "GO:0016348", "GO:0035167", "GO:0035204", "GO:0046331", "GO:0046666", "GO:0031100", "GO:0009410")
+
+#DIA 2 vs 3 
+GO10_list_2.3 = c("GO:0003148", "GO:0007155", "GO:0034311", "GO:2000035", "GO:0007293", "GO:0021523", "GO:0036011", "GO:0036099", "GO:0048664", "GO:0048803")
+```
+exporto los archivos
+```{r}
+#1vs2
+write.table(NOI_enrich_table_BP_1.2, 
+            file = "NOI_enrich_table_BP_1.2.tsv", 
+            sep = "\t", 
+            row.names = FALSE, 
+            quote = FALSE)
+#1vs3
+write.table(NOI_enrich_table_BP_1.3, 
+            file = "NOI_enrich_table_BP_1.3.tsv", 
+            sep = "\t", 
+            row.names = FALSE, 
+            quote = FALSE)
+#2vs3
+write.table(NOI_enrich_table_BP_2.3, 
+            file = "NOI_enrich_table_BP_2.3.tsv", 
+            sep = "\t", 
+            row.names = FALSE, 
+            quote = FALSE)
+```
+
+#GO con 'Circle_dat' 
+```{r circle}
+#DIA 1 vs 2
+NOI_circ_1.2 <- circle_dat(NOI_enrich_table_reord_1.2, NOI_DEgenes_togo_1.2)#preparo objeto que une listas
+sum(!is.na(circ_1.2$zscore))#1170
+#GOCircle(NOI_circ_1.2, nsub = GO10_list_1.2)#hace el grafico circular, llevarlo a la consola
+
+
+#DIA 1 vs 3
+NOI_circ_1.3 <- circle_dat(NOI_enrich_table_reord_1.3, NOI_DEgenes_togo_1.3)#preparo objeto que une listas
+sum(!is.na(NOI_circ_1.3$zscore))#3402
+#GOCircle(NOI_circ_1.3, nsub = GO10_list_1.3)#hace el grafico circular, llevarlo a la consola
+
+
+#DIA 2 vs 3
+NOI_circ_2.3 <- circle_dat(NOI_enrich_table_reord_2.3, NOI_DEgenes_togo_2.3)#preparo objeto que une listas
+sum(!is.na(NOI_circ_2.3$zscore))#1887
+#GOCircle(NOI_circ_2.3, nsub = GO10_list_2.3)#hace el grafico circular, llevarlo a la consola
+
+
+
+```
+
+
+#HEATMAP
+preparo la tabla 'counts_names_GDI' solo con los datos que necesito (conteos y nombres de genes de interes). Para eso cruzo mi tabla de conteos 'NAIco_filt_TMM_cpm_df' con la tabla de anotaciones con los nombres 'nai_to_cap_table_sinP' por 'gene_id' y luego otro inner con 'counts_target'y 'CAPte_trinnotate_genenames_1' por 'target_id'
+```{r, inner-join 'NAIco_filt_TMM_cpm_df' y 'nai_to_cap_table_sinP'}
+#nombres de filas a columna
+tabla_NAIco_filt_TMM_cpm <- rownames_to_column(NAIco_filt_TMM_cpm_df, var = "gene_id")
+
+counts_target = inner_join(tabla_NAIco_filt_TMM_cpm, nai_to_cap_table_sinP, by = "gene_id") %>%
+  select(gene_id, target_id, D1, D2, D3)
+```
+
+```{r inner-join de 'counts_target' y 'CAPte_trinnotate_genenames_1'}
+counts_names = inner_join(counts_target, CAPte_trinnotate_genenames_1, by = "target_id") %>%
+  select(gene_id, target_id, D1, D2, D3, uniprot_name, evalue)
+#limpio los valores de 'uniprot_name' luego de los "_"
+counts_names$uniprot_name <- sub("_.*", "", counts_names$uniprot_name)
+```
+
+preparo una tabla con mis genes de interes 'GDI_tabla'y le hago inner-join con 'counts_names, por 'uniprot_name' y conservando todas las columnas
+```{r, tabla GDI}
+#primero hago un vector
+GDI <- c("ARHG2", "DFP", "GRB2", "TLR4", "PAR14", "PGRP1", "LEG8", "S15A4", "TAXB1", "TEN3", "FAS2", "PTP99", "ELAV4", "BTBD6", "ZN609", "MYCB2", "CTRO", "TENM", "C2D1", "SVEP1", "MABP1", "HIPK2", "SRC1", "OPTN", "LAMB1", "SOX2", "SOX10", "NCL1", "ETS4", "PRRX2", "LIN41", "RB27C", "VWDE", "PROM1", "CD9", "RPGF1", "MK14A", "BMI1B", "TORSO", "NOTCH", "CHD1", "TAGL3", "SAAL1", "DVL3", "NHLC2", "SOSD1", "MACF1", "SUH", "TLE3B", "FINC")
+
+# Convertir a tabla con una sola columna llamada 'uniprot_name'
+GDI_tabla = data.frame(uniprot_name = GDI)
+```
+
+```{r tabla final solo con GDI}
+counts_names_GDI = inner_join(GDI_tabla, counts_names, by = "uniprot_name") %>%
+  select(gene_id, target_id, D1, D2, D3, uniprot_name, evalue)
+
+#filtro y me quedo solo gene_id que ya tengo como GDE
+counts_names_GDI_filt <- counts_names_GDI[c(1, 6, 11, 12, 20, 32, 63, 68, 70, 79, 81, 89, 90, 101, 102, 103, 104, 111, 115, 118, 126, 130, 131, 132, 133, 155, 209, 234, 369, 371, 375, 380, 381, 383, 386, 387, 388, 390, 391, 402, 407, 408, 409, 413, 454, 482, 488, 511, 513, 519, 520, 524, 527, 528, 549, 550, 551, 554, 555, 556, 557, 559, 562, 573, 574, 575, 578, 580, 617, 620, 628), ]
+
+#renombro las isoformas de los genes repetidos
+counts_names_GDI_filt_iso <- counts_names_GDI_filt
+counts_names_GDI_filt_iso[c(2, 3, 12, 13, 14, 15, 16, 17, 19, 20, 22, 23, 24, 27, 28, 29, 30, 31, 32, 33, 36, 37, 41, 42, 43, 53, 54, 55, 56, 57, 58, 59, 60, 61, 66, 67), "uniprot_name"] <- c("DFP_i1", "DFP_i2", "FAS_i1", "FAS_i2", "PTP99_i1", "PTP99_i2", "ELAV4_i1", "ELAV4_i2", "ZN609_i1", "ZN609_i2",  "CTRO_i1", "CTRO_i2", "CTRO_i3", "SVEP1_i1", "SVEP1_i2", "MABP1_i1", "MABP1_i2", "MABP1_i3", "HIPK2_i1", "HIPK2_i2", "LAMB1_i1", "LAMB1_i2", "ETS4_i1", "ETS4_i2", "ETS4_i3", "TORSO_i1", "TORSO_i2", "NOTCH_i1", "NOTCH_i2", "NOTCH_i3", "CHD1_i1", "CHD1_i2", "CHD1_i3", "CHD1_i4", "SOSD1_i1", "SOSD1_i2")
+```
+```{r, mas GDI}
+#agrego manualmente otros GDI nuevos
+nuevas_filas <- tibble(
+  gene_id = c("TRINITY_DN3994_c0_g1_i10", "TRINITY_DN3794_c0_g1_i1", "TRINITY_DN203_c0_g1_i4", "TRINITY_DN3124_c0_g2_i2", "TRINITY_DN879_c0_g1_i5", "TRINITY_DN7243_c0_g1_i1", "TRINITY_DN11784_c1_g1_i2"),
+  target_id = c("ELT96946.1", "ELU11161.1", "ELU07262.1", "ELU06716.1", "ELU06639.1", "ELU18035.1", "ELU00302.1"),
+  D1 = c("35.0325626", "78.2118275", "88.6702060", "10.7404029", "34.0801520", "28.5225270", "20.1539038"),
+  D2 = c("19.46379649", "56.13709454", "55.23260326", "0.02495968", "29.07129252", "15.05504533", "18.95232114"),
+  D3 = c("4.72182516", "39.85956304", "20.47635078", "0.01266441", "23.18186861", "6.39885962", "16.08579992"),
+  uniprot_name = c("DMBT1", "NOTC1", "NOTC2", "TOLL", "LRP4", "TWIST", "PTPRD"),
+  evalue = c("1.04e-85", "0.00e+00", "5.73e-43", "4.13e-21", "0.00e+00", "3.02e-52", "0.00e+00")
+)
+nuevas_filas <- nuevas_filas %>%
+  mutate(across(c(D1, D2, D3, evalue), as.numeric))
+
+counts_names_GDI_filt_iso_new <- bind_rows(counts_names_GDI_filt_iso, nuevas_filas)
+
+```
+
+
+
+#heatmap GDE 'annot_join_N' usando 'pheatmap' 
+```{r, tablas, matriz y anotaciones}
+#Voy preparando la tabla, haciendo leftJoin de annot_join_N y tabla_NAIco_filt_TMM_cpm by=gene_id
+GDE_heat = left_join(annot_join_N, tabla_NAIco_filt_TMM_cpm, by = "gene_id", ) %>%
+  select(gene_id, D1, D2, D3)
+# Asignar gene_id como rownames y eliminar la columna gene_id 
+GDE_heat <- column_to_rownames(GDE_heat, var = "gene_id")
+str(GDE_heat)
+
+#convierto mi df a matriz
+mat_GDE <- data.matrix(GDE_heat)
+
+# Visualizar la matriz
+head(mat_GDE)
+str(mat_GDE)
+#la expresion esta como character, paso a numeric
+
+
+#hago el df con las anotaciones de las filas
+#determina si es GDE o GDI y pone el valor en una nueva columna 'tipo'
+annot_heat_type = annot_join_N %>%
+  mutate(tipo = if_else(gene_id %in% counts_names_GDI_filt_iso_new$gene_id, "GDI", "GDE")) %>%
+  select(gene_id, tipo)
+sum(annot_heat_type$tipo == "GDI")
+
+annot_heat_type <- column_to_rownames(annot_heat_type, var = "gene_id")
+
+```
+
+```{r, heatmap GDE con anotaciones}
+#determino los colores
+ann_colors <- list(
+  tipo = c("GDE" = "cornsilk2",
+              "GDI" = "indianred2"))
+
+pheatmap(mat_GDE,
+         annotation_row = annot_heat_type,
+         annotation_colors = ann_colors,
+         clustering_distance_rows = "euclidean",
+         clustering_distance_cols = "euclidean",
+         clustering_method = "complete",
+         border_color = "grey50",
+         scale = "row",
+         show_rownames = FALSE,
+         fontsize_row = 8,
+         angle_col = c("0"),
+         cellwidth = 30,
+         col = paletteer_c("grDevices::Geyser", 30))
+#paletteer_c("grDevices::Berlin", 30)
+#paletteer_c("grDevices::Earth", 30)
+#paletteer_c("grDevices::Geyser", 30)
+#paletteer_c("ggthemes::Classic Orange-White-Blue", 30)
+#paletteer_c("ggthemes::Red-Blue-White Diverging", 30)
+#paletteer_c("ggthemes::Blue-Green Sequential", 30)
+#(0, 45, 90, 270 and 315)
+
+```
+
+
+#heatmap todos los GDI juntos y clusterizados usando 'pheatmap'
+```{r preparacion matriz}
+#archivo entrada 'counts_names_GDI_filt_iso_new'. Tengo que agregar una columna con la categoria a la que pertenece cada gen
+asignaciones <- list(
+  Inmune = c(1:10, 72, 75),
+  Nervioso = c(11:25, 76, 78),
+  Regeneración = c(26:71, 73, 74, 77)
+)
+#copio el archivo de entrada para la matriz y me quedo solo las columnas que necesito
+GDI_heat = counts_names_GDI_filt_iso_new %>%
+  select(uniprot_name, D1, D2, D3)
+
+GDI_heat$categoria <- NA
+for (cat in names(asignaciones)) {
+  GDI_heat[asignaciones[[cat]], "categoria"] <- cat
+}
+str(GDI_heat)
+
+#hago mi df de anotaciones
+annot_heat_cat = GDI_heat %>%
+  select(uniprot_name, categoria)
+annot_heat_cat <- column_to_rownames(annot_heat_cat, var = "uniprot_name")
+
+#hago mi matriz
+GDI_heat_mat = GDI_heat %>%
+  select(uniprot_name, D1, D2, D3)
+GDI_heat_mat <- column_to_rownames(GDI_heat_mat, var = "uniprot_name")
+
+mat_GDI = data.matrix(GDI_heat_mat)
+```
+
+
+```{r, heatmap GDI con anotaciones}
+#determino los colores
+ann_colors_GDI <- list(
+  categoria = c("Inmune" = "cornsilk3",
+              "Nervioso" = "cyan2",
+          "Regeneración" = "indianred2"))
+
+names(ann_colors_GDI)
+# Debe devolver: "categoria", "otra_columna", etc.
+
+colnames(annot_heat_cat)
+
+pheatmap(mat_GDI,
+         annotation_row = annot_heat_cat,
+         annotation_colors = ann_colors_GDI,
+         annotation_names_row = F,
+         clustering_distance_rows = "euclidean",
+         clustering_distance_cols = "euclidean",
+         clustering_method = "complete",
+         border_color = "grey50",
+         scale = "row",
+         show_rownames = TRUE,
+         cluster_cols = FALSE,
+         fontsize_row = 6,
+         angle_col = c("0"),
+         cellwidth = 30,
+         col = paletteer_c("grDevices::Geyser", 30))
+#paletteer_c("grDevices::Berlin", 30)
+#paletteer_c("grDevices::Earth", 30)
+#paletteer_c("grDevices::Geyser", 30)
+#paletteer_c("ggthemes::Classic Orange-White-Blue", 30)
+#paletteer_c("ggthemes::Red-Blue-White Diverging", 30)
+#paletteer_c("ggthemes::Blue-Green Sequential", 30)
+#(0, 45, 90, 270 and 315)
+
+```
+
+
